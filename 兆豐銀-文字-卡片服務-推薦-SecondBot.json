@@ -1,0 +1,2186 @@
+[
+    {
+        "id": "ff73fcbd.82012",
+        "type": "tab",
+        "label": "Flow 1",
+        "in": [],
+        "out": [],
+        "wires": []
+    },
+    {
+        "id": "6cd3a1ef.26bed",
+        "type": "chat-server",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "wires": []
+    },
+    {
+        "id": "12b8f503.1f0a3b",
+        "type": "enter",
+        "name": "Setup",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 260,
+        "wires": [
+            [
+                "7ce60098.32236"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "true",
+                "p": "_start_setup"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "25896ab8.9e7966",
+        "type": "function",
+        "name": "Setup Data",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1190,
+        "y": 260,
+        "wires": [
+            [
+                "33c436ed.d25f1a"
+            ]
+        ],
+        "func": "const BotUtils = msg.systalk.utils.BotUtils;\nconst QueueUtils = msg.systalk.utils.QueueUtils;\nconst ReqMsgCtrl = msg.systalk.utils.ReqMsgCtrl;\nconst LangCtrl = msg.systalk.utils.LangCtrl;\nconst ReqChannels = msg.systalk.utils.ReqChannels;\nconst ConfigCtrl = msg.systalk.utils.ConfigCtrl;\n\n// normalize request message\n// ReqMsgCtrl.normalize(msg.reqMsg);\n\nif (ReqMsgCtrl.isInitSession(msg.reqMsg)) {\n    BotUtils.resetSessionStats();\n}\n\n// msg.systalk.needInfo = undefined;\n// msg.systalk.nextRound = undefined;\n\nif (!msg.systalk.needInfo) {\n    msg.systalk.needInfo = {\n        lastPayload: null,\n        toAgent: null,\n        currentRound: undefined,\n        giveBack:  undefined,//回饋方式\n        use:  undefined,//刷卡用途\n        entertainment:  undefined,//休閒娛樂\n        transportation: undefined,//交通工具\n        paid:  undefined,//付款方式\n    };\n}\n\n// 進線 channel\nmsg.systalk.channel = node._.clone(msg.reqMsg.channel || ReqChannels.text);\n\n// 使用者語系\nmsg.systalk.lang = LangCtrl.normalize(msg.reqMsg.lang || msg.systalk.lang || 'zh-tw');\n\n// 傳入 second bot，second bot 判斷與先前若不相同，表示新對話，需重設其已紀錄的資訊\nmsg.systalk.sessionSalt = msg.systalk.sessionSalt; // || BotUtils.generateSalt();\nmsg.systalk.fromBot = msg.config.botType;\n\nmsg.systalk.pendingBotQueue = Array.isArray(msg.systalk.pendingBotQueue) && msg.systalk.pendingBotQueue.length\n    ? msg.systalk.pendingBotQueue\n    : [ msg.config.botType ];\n\n// define calling second bot's type\nmsg.botType = msg.reqMsg.botType || QueueUtils.last(msg.systalk.pendingBotQueue) || null; \nmsg.botIntent = msg.reqMsg.intent || msg.systalk.pendingIntent || null;\nmsg.botEntities = msg.reqMsg.entities || msg.systalk.pendingEntities || null;\n\nmsg.systalk.faqState = msg.systalk.faqState || null;\nmsg.systalk.cannotRecognizedCounter = msg.systalk.cannotRecognizedCounter || 0;\nmsg.systalk.resendCounter = msg.systalk.resendCounter || 0;\n\n// 設定是否需進入核身流程\nmsg.systalk.authenticateUser = msg.systalk.authenticateUser || null;\n\nmsg.systalk.stored = msg.systalk.stored || {\n    // 使用者資料\n    // userData: {\n    //     tel: msg.reqMsg.tel || null,\n    //     idNumber: null,\n    //     birth: null,\n    //     isValidId: null,\n    //     customerId: msg.reqMsg.tel || 'webTest',\n    //     traceTag: msg.reqMsg.param.traceTag\n    // },\n    // 判斷使用者是否通過核身驗證\n    auth: {\n        otp: null,\n        bank: null\n    }\n};\n\n// 暫存的身份資訊\nmsg.systalk.identity = msg.systalk.identity || null;\nif (msg.systalk.waitForAuth && msg.reqMsg.message.identity) {\n    msg.systalk.identity = msg.reqMsg.message.identity;\n    msg.systalk.waitForAuth = null;\n}\n\n// 暫存的定位資訊\nmsg.systalk.location = msg.systalk.location || null;\nif (msg.systalk.waitForLocated && msg.reqMsg.message.location) {\n    msg.systalk.location = msg.reqMsg.message.location;\n    msg.systalk.waitForLocated = null;\n}\n\n// 設定值\nmsg.systalk.defaultConfig = msg.systalk.defaultConfig || {\n    faqApi: ConfigCtrl.getFAQApi(msg.config.names.firstFAQ),\n    botName: msg.config.defaultConfig.botName\n};\n\nmsg.systalk.config = msg.systalk.config || node._.cloneDeep(msg.systalk.defaultConfig);\nmsg.systalk.config.faqApi = msg.systalk.config.faqApi || msg.systalk.defaultConfig.faqApi;\nmsg.systalk.config.botName = msg.systalk.config.botName || msg.systalk.defaultConfig.botName;\n\n// 用於 report，計數 session 訊息數\nmsg.systalk.sessionMsgCounter = msg.systalk.sessionMsgCounter ?\n(msg.systalk.sessionMsgCounter + 1) : 1;\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "7ce60098.32236",
+        "type": "function",
+        "name": "Shared Utils",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 380,
+        "y": 260,
+        "wires": [
+            [
+                "fc213e76.fa107"
+            ]
+        ],
+        "func": "/**\n * This file define utils for Demo Kit and template.\n * Could be copied into a function node or import as function library (current not working).\n * \n * Define in `msg.systalk.utils`\n * 定義在 `function node`，會使用到 `Lodash`（定義在 `node._`）\n */\n\n/**\n * Request message types\n * 總機與各 bot 的 Request 訊息類別\n */\nclass ReqMsgTypes {\n    constructor() {\n        this._text = 1;\n        this._textType = 'text';\n        this._speech = 2;\n        this._speechType = 'speech';\n        this._fromOnlineService = 3;\n        this._fromOnlineServiceType = 'from_online_service';\n        this._fromAuthorization = 4;\n        this._fromAuthorizationType = 'from_authorization';\n        this._fromLocation = 5;\n        this._fromLocationType = 'from_location';\n        this._signal = 6;\n        this._signalType = 'signal';\n        this._config = 7;\n        this._configType = 'config';\n        this._grade = 8;\n        this._gradeType = 'grade';\n        this._initSession = 9;\n        this._initSessionType = 'init_session';\n    }\n    get text() { return this._text; }\n    get textType() { return this._textType }\n    get speech() { return this._speech; }\n    get speechType() { return this._speechType; }\n    get fromOnlineService() { return this._fromOnlineService; }\n    get fromOnlineServiceType() { return this._fromOnlineServiceType; }\n    get fromAuthorization() { return this._fromAuthorization; }\n    get fromAuthorizationType() { return this._fromAuthorizationType; }\n    get fromLocation() { return this._fromLocation; }\n    get fromLocationType() { return this._fromLocationType; }\n    get signal() { return this._signal; }\n    get signalType() { return this._signalType; }\n    get config() { return this._config; }\n    get configType() { return this._configType; }\n    get grade() { return this._grade; }\n    get gradeType() { return this._gradeType; }\n    get initSession() { return this._initSession; }\n    get initSessionType() { return this._initSessionType; }\n\n    isText(val) {\n        return val === this.text || val === this.textType;\n    }\n    isSpeech(val) {\n        return val === this.speech || val === this.speechType;\n    }\n    isFromOnlineService(val) {\n        return val === this.fromOnlineService || val === this.fromOnlineServiceType;\n    }\n    isFromAuthorization(val) {\n        return val === this.fromAuthorization || val === this.fromAuthorizationType;\n    }\n    isFromLocation(val) {\n        return val === this.fromLocation || val === this.fromLocationType;\n    }\n    isSignal(val) {\n        return val === this.signal || val === this.signalType;\n    }\n    isConfig(val) {\n        return val === this.config || val === this.configType;\n    }\n    isGrade(val) {\n        return val === this.grade || val === this.gradeType;\n    }\n    isInitSession(val) {\n        return val === this.initSession || val === this.initSessionType;\n    }\n}\n\nconst reqMsgTypes = new ReqMsgTypes();\n\n/**\n* Reply message types\n*/\nclass ReplyMsgTypes {\n    constructor() {\n        this._text = 1;\n        this._textType = 'text';\n        this._speech = 2;\n        this._speechType = 'speech';\n        this._image = 3;\n        this._imageType = 'image';\n        this._sticker = 4;\n        this._stickerType = 'sticker';\n        this._link = 5;\n        this._linkType = 'link';\n        this._dataList = 6;\n        this._dataListType = 'data_list';\n        this._yesOrNo = 7;\n        this._yesOrNoType = 'yes_or_no';\n        this._toCustomerService = 8;\n        this._toCustomerServiceType = 'to_customer_service';\n        this._toOnlineService = 9;\n        this._toOnlineServiceType = 'to_online_service';\n        this._toAuthorization = 10;\n        this._toAuthorizationType = 'to_authorization';\n        this._toLocation = 11;\n        this._toLocationType = 'to_location';\n        this._redirectBot = 12;\n        this._redirectBotType = 'redirect_bot';\n        this._options = 13;\n        this._optionsType = 'options';\n        this._status = 14;\n        this._statusType = 'status';\n        this._action = 15;\n        this._actionType = 'action';\n        this._generalInfo = 16;\n        this._generalInfoType = 'info_general';\n    }\n\n    get text() { return this._text; }\n    get textType() { return this._textType; }\n    get speech() { return this._speech; }\n    get speechType() { return this._speechType; }\n    get image() { return this._image; }\n    get imageType() { return this._imageType; }\n    get sticker() { return this._sticker; }\n    get stickerType() { return this._stickerType; }\n    get link() { return this._link; }\n    get linkType() { return this._linkType; }\n    get dataList() { return this._dataList; }\n    get dataListType() { return this._dataListType; }\n    get yesOrNo() { return this._yesOrNo; }\n    get yesOrNoType() { return this._yesOrNoType; }\n    get toCustomerService() { return this._toCustomerService; }\n    get toCustomerServiceType() { return this._toCustomerServiceType; }\n    get toOnlineService() { return this._toOnlineService; }\n    get toOnlineServiceType() { return this._toOnlineServiceType; }\n    get toAuthorization() { return this._toAuthorization; }\n    get toAuthorizationType() { return this._toAuthorizationType; }\n    get toLocation() { return this._toLocation; }\n    get toLocationType() { return this._toLocationType; }\n    get redirectBot() { return this._redirectBot; }\n    get redirectBotType() { return this._redirectBotType; }\n    get options() { return this._options; }\n    get optionsType() { return this._optionsType; }\n    get status() { return this._status; }\n    get statusType() { return this._statusType; }\n    get action() { return this._action; }\n    get actionType() { return this._actionType; }\n    get generalInfo() { return this._generalInfo; }\n    get generalInfoType() { return this._generalInfoType; }\n\n    /**\n     * Check type value is 'text' type or not\n     */\n    isText(val) {\n        return val === this.text || val === this.textType;\n    }\n    isSpeech(val) {\n        return val === this.speech || val === this.speechType;\n    }\n    isImage(val) {\n        return val === this.image || val === this.imageType;\n    }\n    isSticker(val) {\n        return val === this.sticker || val === this.stickerType;\n    }\n    isLink(val) {\n        return val === this.link || val === this.linkType;\n    }\n    isDataList(val) {\n        return val === this.dataList || val === this.dataListType;\n    }\n    isYesOrNo(val) {\n        return val === this.yesOrNo || val === this.yesOrNoType;\n    }\n    isToCustomerService(val) {\n        return val === this.toCustomerService || val === this.toCustomerServiceType;\n    }\n    isToOnlineService(val) {\n        return val === this.toOnlineService || val === this.toOnlineServiceType;\n    }\n    isToAuthorization(val) {\n        return val === this.toAuthorization || val === this.toAuthorizationType;\n    }\n    isToLocation(val) {\n        return val === this.toLocation || val === this.toLocationType;\n    }\n    isRedirectBot(val) {\n        return val === this.redirectBot || val === this.redirectBotType;\n    }\n    isOptions(val) {\n        return val === this.options || val === this.optionsType;\n    }\n    isStatus(val) {\n        return val === this.status || val === this.statusType;\n    }\n    isAction(val) {\n        return val === this.action || val === this.actionType;\n    }\n    isGeneralInfo(val) {\n        return val === this.generalInfo || val === this.generalInfoType;\n    }\n}\n\nconst replyMsgTypes = new ReplyMsgTypes();\n\n/**\n* Signals\n*/\nclass ReqSignals {\n    constructor() {\n        this._start = 1;\n        this._startSignal = 'start';\n        this._continue = 2;\n        this._continueSignal = 'continue';\n        this._end = 3;\n        this._endSignal = 'end';\n        this._idle = 4;\n        this._idleSignal = 'idle';\n        this._quit = 5;\n        this._quitSignal = 'quit';\n        this._passedFromCustomerService = 6;\n        this._passedFromCustomerServiceSignal = 'passed_from_customer_service';\n    }\n\n    get start() { return this._start; }\n    get startSignal() { return this._startSignal; }\n    get continue() { return this._continue; }\n    get continueSignal() { return this._continueSignal; }\n    get end() { return this._end; }\n    get endSignal() { return this._endSignal; }\n    get idle() { return this._idle; }\n    get idleSignal() { return this._idleSignal; }\n    get quit() { return this._quit; }\n    get quitSignal() { return this._quitSignal; }\n    get passedFromCustomerService() { return this._passedFromCustomerService; }\n    get passedFromCustomerServiceSignal() { return this._passedFromCustomerServiceSignal; }\n\n\n    isStart(val) {\n        return val === this.start || (typeof val === 'string' && val.toLowerCase() === this.startSignal);\n    }\n    isEnd(val) {\n        return val === this.end || (typeof val === 'string' && val.toLowerCase() === this.endSignal);\n    }\n    isContinue(val) {\n        return val === this.continue || (typeof val === 'string' && val.toLowerCase() === this.continueSignal);\n    }\n    isIdle(val) {\n        return val === this.idle || (typeof val === 'string' && val.toLowerCase() === this.idleSignal);\n    }\n    isQuit(val) {\n        return val === this.quit || (typeof val === 'string' && val.toLowerCase() === this.quitSignal);\n    }\n    isPassedFromCustomerService(val) {\n        return val === this.passedFromCustomerService || (typeof val === 'string' && val.toLowerCase() === this.passedFromCustomerServiceSignal);\n    }\n}\n\nconst reqSignals = new ReqSignals();\n\n/**\n * Controller for request channels\n */\nclass ReqChannels {\n    constructor() {\n    }\n\n    /**\n     * Channel object with default name `text`\n     *\n     * @readonly\n     * @memberof ReqChannels\n     */\n    get text() {\n        return new Channel('文字', { isText: true, isSpeech: false });\n    }\n\n    /**\n     * Channel object of default name `speech`\n     *\n     * @readonly\n     * @memberof ReqChannels\n     */\n    get speech() {\n        return new Channel('語音', { isText: false, isSpeech: true });\n    }\n\n    /**\n     * If the chanel supports message type of `text`\n     * @param {Channel} val Channel object\n     */\n    isText(val) {\n        return !node._.isNil(val) && val.isText;\n    }\n\n    /**\n     * If the channel supports message type of `speech`\n     * @param {Channel} val Channel object\n     */\n    isSpeech(val) {\n        return !node._.isNil(val) && val.isSpeech;\n    }\n}\n\nconst reqChannels = new ReqChannels();\n\n/**\n * Channel object\n * @property {string} name\n * @property {boolean} isText if this channel supports text messages\n * @property {boolean} isSpeech if this channel \n */\nclass Channel {\n    constructor(nameOrChannel, configs) {\n        if (!node._.isNil(nameOrChannel) &&\n            node._.isString(nameOrChannel.name) &&\n            node._.isBoolean(nameOrChannel.isText) && node._.isBoolean(nameOrChannel.isSpeech)) {\n            this.name = nameOrChannel.name;\n            this.isText = nameOrChannel.isText;\n            this.isSpeech = nameOrChannel.isSpeech;\n        }\n        if (node._.isString(nameOrChannel)) {\n            this.name = nameOrChannel;\n        }\n        if (!node._.isNil(configs)) {\n            this.isText = configs.isText || false;\n            this.isSpeech = configs.isSpeech || false;\n        }\n    }\n\n    valueOf() {\n        return this.name;\n    }\n\n    toString() {\n        return this.name;\n    }\n}\n\nclass ReplyActionTypes {\n    constructor() {\n        this._grading = 'grading';\n        this._end = 'end';\n        this._renew = 'renew';\n    }\n\n    get grading() { return this._grading; }\n    get end() { return this._end; }\n    get renew() { return this._renew; }\n\n    isGrading(val) {\n        return val === this.grading;\n    }\n    isEnd(val) {\n        return val === this.end;\n    }\n    isRenew(val) {\n        return val === this._renew;\n    }\n}\n\nconst replyActionTypes = new ReplyActionTypes();\n\n/**\n* Reply message factory\n* recommand to use `create()`\n*/\nclass ReplyMsgFactory {\n    createText(text) {\n        if (node._.isString(text)) {\n            return {\n                type: replyMsgTypes.text,\n                text: text\n            };\n        }\n        return null;\n    }\n    createTextType(text) {\n        if (node._.isString(text)) {\n            return {\n                type: replyMsgTypes.textType,\n                text: text\n            };\n        }\n        return null;\n    }\n    createSpeech(speech) {\n        if (node._.isString(speech)) {\n            return {\n                type: replyMsgTypes.speech,\n                speech: speech\n            };\n        }\n        return null;\n    }\n    createSpeechType(speech) {\n        if (node._.isString(speech)) {\n            return {\n                type: replyMsgTypes.speechType,\n                speech: speech\n            };\n        }\n        return null;\n    }\n    createImage(title, alt, imgUrl) {\n        return {\n            type: replyMsgTypes.image,\n            title: title,\n            alt: alt,\n            imgUrl: imgUrl\n        };\n    }\n    /**\n     * 建立圖片類型訊息\n     * @param {*} params { title, alt, imgUrl }\n     */\n    createImageType(params) {\n        let msg = {\n            type: replyMsgTypes.imageType\n        };\n        if (params) {\n            if (params.title) {\n                msg.title = params.title;\n            }\n            if (params.alt) {\n                msg.alt = params.alt;\n            }\n            if (params.imgUrl) {\n                msg.imgUrl = params.imgUrl;\n            }\n        }\n        return msg;\n    }\n    createSticker(alt, stickerUrl) {\n        return {\n            type: replyMsgTypes.sticker,\n            alt: alt,\n            imgUrl: stickerUrl\n        };\n    }\n    /**\n     * 建立貼圖類型訊息\n     * @param {*} params { alt, imgUrl }\n     */\n    createStickerType(params) {\n        let msg = {\n            type: replyMsgTypes.stickerType\n        };\n        if (params) {\n            if (params.alt) {\n                msg.alt = params.alt;\n            }\n            if (params.imgUrl) {\n                msg.imgUrl = params.imgUrl;\n            }\n        }\n        return msg;\n    }\n    createLink(title, url, data) {\n        let reply = {\n            type: replyMsgTypes.link,\n            text: title, // TODO: deprecated\n            title: title,\n            url: url\n        };\n        reply = Object.assign(reply, data);\n        return reply;\n    }\n    /**\n     * 建立連結類型訊息\n     * @param {*} params { title, url }\n     */\n    createLinkType(params) {\n        let reply = {\n            type: replyMsgTypes.linkType\n        };\n        if (params) {\n            if (params.title) {\n                reply.title = params.title;\n            }\n            if (params.url) {\n                reply.url = params.url;\n            }\n        }\n        return reply;\n    }\n    createDataList(data, title) {\n        return {\n            type: replyMsgTypes.dataList,\n            title: title,\n            data: Array.isArray(data) ? data : [data]\n        };\n    }\n    /**\n     * 建立 data list 類型訊息\n     * @param {*} params { data, title, botType, intent }\n     */\n    createDataListType(params) {\n        let reply = {\n            type: replyMsgTypes.dataListType\n        };\n        if (params) {\n            if (Array.isArray(params.data) && params.data.length) {\n                reply.data = node._.cloneDeep(params.data);\n            }\n            if (params.title) {\n                reply.title = params.title;\n            }\n            if (params.botType) {\n                reply.botType = params.botType;\n            }\n            if (params.intent) {\n                reply.intent = params.intent;\n            }\n        }\n        return reply;\n    }\n    createYesOrNo(yesText, noText) {\n        return {\n            type: replyMsgTypes.yesOrNo,\n            yes: yesText,\n            no: noText\n        };\n    }\n    /**\n     * 建立 yes/no 選項訊息\n     * @param {*} params { yes, no }\n     */\n    createYesOrNoType(params) {\n        let reply = {\n            type: replyMsgTypes.yesOrNoType\n        };\n        if (params) {\n            if (params.yes) {\n                reply.yes = params.yes;\n            }\n            if (params.no) {\n                reply.no = params.no;\n            }\n        }\n        return reply;\n    }\n    createToCustomerService(options) {\n        let reply = {\n            type: replyMsgTypes.toCustomerService\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToCustomerServiceType(options) {\n        let reply = {\n            type: replyMsgTypes.toCustomerServiceType\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToOnlineService(options) {\n        let reply = {\n            type: replyMsgTypes.toOnlineService\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToOnlineServiceType(options) {\n        let reply = {\n            type: replyMsgTypes.toOnlineServiceType\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToAuthorization(options) {\n        let reply = {\n            type: replyMsgTypes.toAuthorization,\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToAuthorizationType(options) {\n        let reply = {\n            type: replyMsgTypes.toAuthorizationType\n        };\n        if (node._.isObject(options)) {\n            for (let prop in options) {\n                reply[prop] = options[prop];\n            }\n        }\n        return reply;\n    }\n    createToLocation(botType, entities, location) {\n        return {\n            type: replyMsgTypes.toLocation,\n            botType: botType,\n            location: location,\n            entities: entities\n        };\n    }\n    /**\n     * 建立需取得定位訊息\n     * @param {*} params { botType, intent }\n     */\n    createToLocationType(params) {\n        let reply = {\n            type: replyMsgTypes.toLocationType\n        };\n        if (params) {\n            if (params.botType) {\n                reply.botType = params.botType;\n            }\n            if (params.intent) {\n                reply.intent = params.intent;\n            }\n        }\n        return reply;\n    }\n    createRedirectBot(opts) {\n        return {\n            type: replyMsgTypes.redirectBot,\n            botType: opts && opts.botType,\n            intent: opts && opts.intent,\n            entities: opts && opts.entities,\n            data: opts && opts.data\n        };\n    }\n    /**\n     * 建立要求總機重新導向 second bot 類型訊息\n     * @param {*} params { botType, intent, entities, data }\n     */\n    createRedirectBotType(params) {\n        let reply = {\n            type: replyMsgTypes.redirectBotType\n        };\n        if (params) {\n            if (params.botType) {\n                reply.botType = params.botType;\n            }\n            if (params.intent) {\n                reply.intent = params.intent;\n            }\n            if (params.entities) {\n                reply.entities = node._.cloneDeep(params.entities);\n            }\n            if (params.data) {\n                reply.data = node._.cloneDeep(params.data);\n            }\n        }\n        return reply;\n    }\n    /**\n     * 建立 options 訊息物件\n     * data 陣列中僅允許包含 text, speech, image, sticker, link\n     * @param opts <Option_Item>[] Including properties : title, payload, url\n     * @param title string Title\n     */\n    createOptions(opts, title) {\n        const ctrl = new ReplyMsgCtrl();\n        let options = Array.isArray(opts) ? [].concat(opts) : [opts];\n        options = options.filter(opt => {\n            return !!opt && (opt.title && (opt.payload || opt.url));\n        });\n\n        let reply = {\n            type: replyMsgTypes.options\n        };\n        if (options) {\n            reply.data = options;\n        }\n        if (title) {\n            reply.title = title;\n        }\n        return reply;\n    }\n    /**\n     * 建立選項類型訊息\n     * @param {*} params { opts, title }\n     */\n    createOptionsType(params) {\n        let reply = {\n            type: replyMsgTypes.optionsType\n        };\n\n        if (params) {\n            let options = Array.isArray(params.opts) ? [].concat(opts) : [opts];\n            options = options.filter(opt => {\n                return !!opt && (opt.title && (opt.payload || opt.url));\n            });\n\n\n            if (options) {\n                reply.data = node._.cloneDeep(options);\n            }\n            if (title) {\n                reply.title = title;\n            }\n        }\n        return reply;\n    }\n    createStatus(code, msg) {\n        return {\n            type: replyMsgTypes.status,\n            status: {\n                code: code,\n                message: msg\n            }\n        };\n    }\n    /**\n     * 建立狀態訊息\n     * @param {*} params { status: { code, message } }\n     */\n    createStatusType(params) {\n        let reply = {\n            type: replyMsgTypes.statusType\n        };\n        if (params) {\n            if (params.status) {\n                reply.status = node._.cloneDeep(params.status);\n            }\n        }\n        return reply;\n    }\n    createAction(actionType) {\n        return {\n            type: replyMsgTypes.action,\n            action: actionType\n        };\n    }\n    /**\n     * 建立動作訊息\n     * @param {*} params { action }\n     */\n    createActionType(params) {\n        let reply = {\n            type: replyMsgTypes.actionType\n        };\n        if (params) {\n            if (params.action) {\n                reply.action = params.action;\n            }\n        }\n        return reply;\n    }\n    create(data) {\n        const reply = {};\n        if (data.type) { reply.type = data.type; }\n        if (data.text) { reply.text = data.text; }\n        if (data.speech) { reply.speech = data.speech; }\n        if (data.title) { reply.title = data.title; }\n        if (data.alt) { reply.alt = data.alt; }\n        if (data.imgUrl) { reply.imgUrl = data.imgUrl; }\n        if (data.url) { reply.url = data.url; }\n        if (data.data) { reply.data = node._.cloneDeep(data.data); }\n        if (data.yes) { reply.yes = data.yes; }\n        if (data.no) { reply.no = data.no; }\n        if (data.userId) { reply.userId = data.userId; }\n        if (data.botType) { reply.botType = data.botType; }\n        if (data.intent) { reply.intent = data.intent; }\n        if (data.entities) { reply.entities = node._.cloneDeep(data.entities); }\n        if (data.location) { reply.location = node._.cloneDeep(data.location); }\n        if (data.action) { reply.action = data.action; }\n        if (data.status) { reply.status = node._.cloneDeep(data.status); }\n        if (data.postbackReq) { reply.postbackReq = node._.cloneDeep(data.postbackReq); }\n        return reply;\n    }\n}\n\nclass ReqMsgCtrl {\n    isText(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isText(msg.message.type) : reqMsgTypes.isText(msg.type);\n    }\n\n    isSpeech(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isSpeech(msg.message.type) : reqMsgTypes.isSpeech(msg.type);\n    }\n\n    isFromOnlineService(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isFromOnlineService(msg.message.type) : reqMsgTypes.isFromOnlineService(msg.type);\n    }\n\n    isFromAuthorization(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isFromAuthorization(msg.message.type) : reqMsgTypes.isFromAuthorization(msg.type);\n    }\n\n    isFromLocation(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isFromLocation(msg.message.type) : reqMsgTypes.isFromLocation(msg.type);\n    }\n\n    isSignal(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isSignal(msg.message.type) : reqMsgTypes.isSignal(msg.type);\n    }\n\n    isStartSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isStart(msg.message.signal);\n    }\n\n    isContinueSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isContinue(msg.message.signal);\n    }\n\n    isEndSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isEnd(msg.message.signal);\n    }\n\n    isIdleSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isIdle(msg.message.signal);\n    }\n\n    isQuitSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isQuit(msg.message.signal);\n    }\n\n    isPassedFromCustomerServiceSignal(msg) {\n        return this.isSignal(msg) && !!msg.message.signal && reqSignals.isPassedFromCustomerService(msg.message.signal);\n    }\n\n    isConfig(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isConfig(msg.message.type) : reqMsgTypes.isConfig(msg.type);\n    }\n\n    isGrade(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isGrade(msg.message.type) : reqMsgTypes.isGrade(msg.type);\n    }\n\n    isInitSession(msg) {\n        return !!msg && msg.message ? reqMsgTypes.isInitSession(msg.message.type) : reqMsgTypes.isInitSession(msg.type);\n    }\n\n    /**\n     * Normalize message's channel\n     * By default, channel would be a text channel\n     * @param {any} reqMsg request message object\n     */\n    normalize(reqMsg) {\n        if (!reqMsg || !reqMsg.message) {\n            return;\n        }\n        let channelObj = this._normalizeChannel(reqMsg.channel) || reqChannels.text;\n        if (!node._.isNil(channelObj)) {\n            reqMsg.channel = node._.clone(channelObj);\n        }\n    }\n\n\n    /**\n     * Normalize channel object\n     * @param {any} channel \n     */\n    _normalizeChannel(channel) {\n        let channelObj = null; // set the default channel\n        if (node._.isNumber(channel)) {\n            // If the channel is number, and > 0\n            // it would be deprecated channel type, convert it.\n            if (channel > 0) {\n                channelObj = new Channel(channel.toString(), {\n                    isText: channel & 1 === 1,\n                    isSpeech: channel & 2 === 2\n                });\n            }\n            else {\n                channelObj = new Channel(channel.toString(), {\n                    isText: true,\n                    isSpeech: false\n                });\n            }\n        }\n        else if (node._.isString(channel)) {\n            channelObj = new Channel(channel, {\n                isText: true,\n                isSpeech: false\n            });\n        }\n        else if (!node._.isNil(channel) &&\n            node._.isString(channel.name)) {\n            channelObj = new Channel(channel.name, {\n                isText: node._.isBoolean(channel.isText) ? channel.isText : !!channel.isText,\n                isSpeech: node._.isBoolean(channel.isSpeech) ? channel.isSpeech : !!channel.isSpeech\n            });\n        }\n        return channelObj;\n    }\n}\n\nclass ReplyMsgCtrl {\n    isText(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isText(msg.type);\n    }\n\n    isSpeech(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isSpeech(msg.type);\n    }\n\n    isImage(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isImage(msg.type);\n    }\n\n    isSticker(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isSticker(msg.type);\n    }\n\n    isLink(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isLink(msg.type);\n    }\n\n    isDataList(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isDataList(msg.type);\n    }\n\n    isYesOrNo(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isYesOrNo(msg.type);\n    }\n\n    isToCustomerService(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isToCustomerService(msg.type);\n    }\n\n    isToOnlineService(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isToOnlineService(msg.type);\n    }\n\n    isToAuthorization(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isToAuthorization(msg.type);\n    }\n\n    isToLocation(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isToLocation(msg.type);\n    }\n\n    isRedirectBot(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isRedirectBot(msg.type);\n    }\n\n    isOptions(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isOptions(msg.type);\n    }\n\n    isStatus(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isStatus(msg.type);\n    }\n\n    isAction(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isAction(msg.type);\n    }\n\n    isGeneralInfo(msg) {\n        return !!msg && !!msg.type && replyMsgTypes.isGeneralInfo(msg.type);\n    }\n\n    isValid(msg) {\n        return this.isText(msg) ||\n            this.isSpeech(msg) ||\n            this.isImage(msg) ||\n            this.isSticker(msg) ||\n            this.isLink(msg) ||\n            this.isDataList(msg) ||\n            this.isYesOrNo(msg) ||\n            this.isToCustomerService(msg) ||\n            this.isToOnlineService(msg) ||\n            this.isToAuthorization(msg) ||\n            this.isToLocation(msg) ||\n            this.isRedirectBot(msg) ||\n            this.isOptions(msg) ||\n            this.isStatus(msg) ||\n            this.isAction(msg) ||\n            this.isGeneralInfo(msg);\n    }\n}\n\n/**\n * 物件相關 utils\n */\nclass ObjUtils {\n\n    removeSpecialCharFromKeys(obj) {\n        for (let prop in obj) {\n            let testReg = /\\./g;\n            if (testReg.test(prop)) {\n                const newProp = prop.replace(testReg, '');\n                let propVal = obj[prop];\n                delete obj[prop];\n                obj[newProp] = propVal;\n            }\n        }\n        return obj;\n    }\n}\n\n/**\n * 訊息相關 utils\n */\nclass MsgUtils {\n    /**\n     * Create output array (index of total)\n     * @params msg msg obj\n     * @params index 1-based\n     * @params total num of outputs\n     */\n    output(msg, index, total) {\n        total = !isNaN(total) && total >= 1 ? total : 1;\n        index = !isNaN(index) && index >= 1 && index <= total ? index : 1;\n        let outputs = new Array(total);\n        outputs.fill(null);\n        outputs[index - 1] = msg;\n        return outputs;\n    }\n}\n\n/**\n * 結束動作選項\n */\nclass QuitOptions {\n    constructor() {\n        this._none = 0;\n        this._quitNone = 'quit_none';\n        this._current = 1;\n        this._quitCurrent = 'quit_current';\n        this._all = 2;\n        this._quitAll = 'quit_all';\n    }\n\n    get none() { return this._none; }\n    get quitNone() { return this._quitNone; }\n    get current() { return this._current; }\n    get quitCurrent() { return this._quitCurrent; }\n    get all() { return this._all; }\n    get quitAll() { return this._quitAll; }\n}\n\nconst quitOptions = new QuitOptions();\n\n\nclass LocalesUtils {\n\n    /**\n     * 取得 locales 對應語句或物件\n     * 若指定 channel 不存在 key 值，判斷 text 或 speech 是否有定義\n     * \n     * @param {Channel} channel Channel object\n     * @param {string | Array} key 以 dot ('.')分隔的字串，表示 property path\n     * @param {Object} replaceParams\n     */\n    get(locales, channel, key, replaceParams) {\n        if (!node._.isNil(locales)) {\n            let result = node._.get(locales[channel], key);\n            // 預設 Channel 與對應的語料\n            if (!result) {\n                if (reqChannels.isText(channel)) {\n                    result = node._.get(locales[reqChannels.text], key);\n                }\n                else if (reqChannels.isSpeech(channel)) {\n                    result = node._.get(locales[reqChannels.speech], key);\n                }\n            }\n            if (!!result && typeof result === 'string') {\n                result = this.replaceTextByParams(result, replaceParams);\n            }\n            return result;\n        }\n    }\n\n    /**\n     * 取代文字中指定參數，文字中須以 {{param}} 表示\n     * @param {*} text \n     * @param {*} params 取代參數值，會包含對應的參數，如 { param: \"new value\" }\n     */\n    replaceTextByParams(text, params) {\n        if (params) {\n            Object.keys(params).forEach(key => {\n                if (typeof params[key] === 'string') {\n                    const regex = new RegExp('{{\\\\s*' + key + '\\\\s*}}', 'gm');\n                    text = text.replace(regex, params[key]);\n                }\n            });\n        }\n        return text;\n    }\n}\n\n/**\n * 提供 First-In-First-Out 操作於指定的 array\n */\nclass QueueUtils {\n    /**\n     * 新增至 Queue 最後\n     */\n    push(queue, data) {\n        if (Array.isArray(queue) && !!data) {\n            if (!node._.isEqual(this.last(queue), data))\n                queue.push(data);\n        }\n    }\n    /**\n     * 從 Queue 最後取出\n     */\n    pop(queue) {\n        if (Array.isArray(queue)) {\n            let item = queue.pop();\n            return typeof item === 'object' ?\n                node._.cloneDeep(item) : item;\n        }\n        return null;\n    }\n    /**\n     * 從 Queue 第一個取出\n     */\n    shift(queue) {\n        if (Array.isArray(queue)) {\n            let item = queue.shift();\n            return typeof item === 'object' ?\n                node._.cloneDeep(item) : item;\n        }\n        return null;\n    }\n    /**\n     * 清除 Queue\n     */\n    clear(queue) {\n        if (Array.isArray(queue)) {\n            queue.splice(0, queue.length);\n        }\n    }\n    /**\n     * 刪除 Queue 中指定項目\n     */\n    remove(queue, index) {\n        if (Array.isArray(queue) &&\n            typeof index === 'number' && index >= 0 &&\n            queue.length && index < queue.length) {\n            queue.splice(index, 1);\n        }\n    }\n    /**\n     * 取得 Queue 的第一個項目\n     */\n    first(queue) {\n        if (Array.isArray(queue) && queue.length > 0) {\n            return typeof queue[0] === 'object' ?\n                Object.assign({}, queue[0]) : queue[0];\n        }\n        return null;\n    }\n    /**\n     * 取得 Queue 的最新的項目\n     */\n    last(queue) {\n        if (Array.isArray(queue) && queue.length > 0) {\n            return typeof queue[queue.length - 1] === 'object' ?\n                Object.assign({}, queue[queue.length - 1]) : queue[queue.length - 1];\n        }\n        return null;\n    }\n\n    /**\n     * 取得指定順位的項目\n     * @param {*} queue array of items as queue\n     * @param {*} index 0-based index\n     */\n    get(queue, index) {\n        if (Array.isArray(queue) &&\n            typeof index === 'number' && index >= 0 &&\n            queue.length && index < queue.length) {\n            return typeof queue[index] === 'object' ?\n                Object.assign({}, queue[index]) : queue[index];\n        }\n    }\n    /**\n     * 從最後一個倒數，取得指定順位的項目\n     * @param {*} queue array of items as queue\n     * @param {*} index 0-based index\n     */\n    getFromLast(queue, index) {\n        if (Array.isArray(queue) &&\n            typeof index === 'number' && index >= 0 &&\n            queue.length && index < queue.length) {\n            return typeof queue[queue.length - index - 1] === 'object' ?\n                Object.assign({}, queue[queue.length - index - 1]) : queue[queue.length - index - 1];\n        }\n    }\n}\n\n/**\n * 字串相關工具\n */\nclass StringUtils {\n    /**\n     * 計算字串最短距離\n     * @param {*} str1 \n     * @param {*} str2 \n     */\n    levenshteinDistance(str1, str2) {\n        str1 = str1 || '';\n        str2 = str2 || '';\n        let vectorPrevious = [];\n        let vectorCurrent = [];\n\n        for (let i = 0; i <= str2.length; ++i) {\n            vectorPrevious[i] = i;\n        }\n        for (let i = 0; i < str1.length; ++i) {\n            vectorCurrent[0] = i + 1;\n\n            for (let j = 0; j < str2.length; ++j) {\n                let deletionCost = vectorPrevious[j + 1] + 1;\n                let insertionCost = vectorCurrent[j] + 1;\n                let substitutionCost = 0;\n\n                if (str1[i] === str2[j]) {\n                    substitutionCost = vectorPrevious[j];\n                } else {\n                    substitutionCost = vectorPrevious[j] + 1;\n                }\n                vectorCurrent[j + 1] = node._.min([\n                    deletionCost,\n                    insertionCost,\n                    substitutionCost\n                ]);\n            }\n\n            vectorPrevious = [].concat(vectorCurrent);\n            vectorCurrent = [];\n        }\n        return vectorPrevious[str2.length];\n    }\n\n    /**\n     * 計算字串最短距離，並轉成相似度(0.0 ~ 1.0)\n     * @param {*} str1 \n     * @param {*} str2 \n     */\n    stringSimilarity(str1, str2) {\n        let distance = this.levenshteinDistance(str1, str2);\n        let maxLen = node._.max([str1.length, str2.length]);\n        return parseFloat((maxLen - distance) / maxLen);\n    }\n}\n\nconst stringUtils = new StringUtils();\n\n/**\n * Setup and update `msg.report_stats` and `msg.systalk.report_stats_session`\n */\nclass ReportUtils {\n\n    /**\n     * Get channel's description, then set to `msg.report_stats_session.channel`\n     * @param {Object} reportStatsSession report stats per session\n     * @param {Channel} channel Channel object\n     */\n    setSessionChannel(reportStatsSession, channel) {\n        if (!node._.isNil(reportStatsSession) && !node._.isNil(channel)) {\n            let stats = reportStatsSession;\n            stats.channel = channel.toString();\n        }\n    }\n\n    /**\n     * \n     * @param {Object} reportStatsSession report stats per session\n     * @param {number} hasInputed `true` if user has inputed\n     */\n    setSessionUserHasInputed(reportStatsSession, hasInputed) {\n        if (!node._.isNil(reportStatsSession)) {\n            reportStatsSession.userHasInputed = hasInputed || false;\n        }\n    }\n\n    /**\n     * Set `msg.systalk.report_stats_session.toCustomerService` to check if this session is transfered to customer service\n     * @param {Object} reportStatsSession report stats per session\n     * @param {boolean} isTransferedToCS is this session transfered to customer service\n     */\n    setSessionToCustomerService(reportStatsSession, isTransferedToCS) {\n        reportStatsSession.toCustomerService = node._.isNil(isTransferedToCS) ? false : isTransferedToCS;\n    }\n\n    /**\n     * 使用者對 Chat Bot 評分\n     * @param {*} reportStatsSession report stats per session\n     * @param {number} score 評分\n     */\n    setSessionScoreForBot(reportStatsSession, score) {\n        if (!node._.isNil(reportStatsSession)) {\n            let _score = parseInt(score);\n            reportStatsSession.botUserScore = !isNaN(_score) && _score >= 0 ? _score : 0;\n        }\n    }\n\n    /**\n     * 使用者對客服人員的評分\n     * @param {Object} reportStatsSession report stats per session\n     * @param {number} score 評分\n     */\n    setSessionScoreForAgent(reportStatsSession, score) {\n        if (!node._.isNil(reportStatsSession)) {\n            let _score = parseInt(score);\n            reportStatsSession.agentUserScore = !isNaN(_score) && _score >= 0 ? _score : 0;\n        }\n    }\n\n    /**\n     * 設定是否為 `undecided`\n     * @param {Object} reportStats report stats per message\n     * @param {string} deciding `Decided`, `Undecided` or `Suggested FAQ`\n     */\n    setDeciding(reportStats, deciding) {\n        if (!node._.isNil(reportStats) && !node._.isNil(deciding)) {\n            reportStats.deciding = deciding;\n        }\n    }\n}\n\nclass LangCtrl {\n    constructor() {\n    }\n\n    /**\n     * Normalize lang code: lower case & separated by `-`\n     * ex: `zh-tw`, `en-us`\n     * @param {string} langCode lang code\n     */\n    normalize(langCode) {\n        if (!!langCode) {\n            return langCode.toLowerCase().trim();\n        }\n    }\n\n    /**\n     * Return the `langCode`, if it's valid in `validLangs`, `defaultLang` otherwise \n     * @param {string[]} validLangs collection of valid lang codes\n     * @param {string} langCode lang code to be determined\n     * @param {string} defaultLang default as `langCode` not in `validLangs`\n     */\n    validOrDefault(validLangs, langCode, defaultLang) {\n        if (Array.isArray(validLangs)) {\n            return validLangs.some(x => this.normalize(x) === this.normalize(langCode)) ?\n                langCode : defaultLang;\n        }\n    }\n}\n\nclass AnalysisCtrl {\n    constructor() { }\n\n    /**\n     * Map NLU result for analysis\n     * \n     * @param {Object} nlu NLU result object\n     * @param {Object} extraConfigs Extra configs for NLU  \n     * ```typescript\n     * {\n     *   isFirstNLU: boolean;\n     *   isSecondNLU: boolean;\n     *   isThirdNLU: boolean;\n     *   threshold: number;\n     * }\n     * ```\n     * @returns NLU Result for analysis\n     * ```typescript\n     * {\n     *   sentence: string;\n     *   intents: IntentResult[];\n     *   entities: EntityResult[];\n     * \n     *   isFirstNLU: boolean;\n     *   isSecondNLU: boolean;\n     *   isThirdNLU: boolean;\n     *   threshold: number;\n     *   secondThreshold: number;\n     *   fallbackScore: number;\n     *   name: string;\n     * }\n     * ```\n     */\n    mapNLUResult(nlu, extraConfigs) {\n        let res = null;\n        if (!node._.isNil(nlu)) {\n            res = {};\n            res.sentence = nlu.sentence;\n            res.intents = [].concat(nlu.intents.map(x => this.mapIntentResult(x)).filter(x => !!x));\n            res.entities = [].concat(nlu.entities.map(y => this.mapEntityResult(y)).filter(y => !!y));\n\n            res.isFirstNLU = !!extraConfigs && extraConfigs.isFirstNLU || false;\n            res.isSecondNLU = !!extraConfigs && extraConfigs.isSecondNLU || false;\n            res.isThirdNLU = !!extraConfigs && extraConfigs.isThirdNLU || false;\n            res.threshold = !!extraConfigs && extraConfigs.threshold || 0;\n            res.secondThreshold = !!extraConfigs && extraConfigs.secondThreshold || 0;\n            res.fallbackScore = !!extraConfigs && extraConfigs.fallbackScore || 0;\n            res.name = !!extraConfigs && extraConfigs.name;\n        }\n        return res;\n    }\n\n    mapIntentResult(intent) {\n        let res = null;\n        if (!node._.isNil(intent)) {\n            res = {};\n            res.intent_id = intent.intent_id;\n            res.intent = intent.intent;\n            res.score = intent.score;\n        }\n        return res;\n    }\n\n    mapEntityResult(entity) {\n        let res = null;\n        if (!node._.isNil(entity)) {\n            res = {};\n            res.entity_id = entity.entity_id;\n            res.info = entity.info;\n            res.text = entity.text;\n            res.key_user_phrase = entity.key_user_phrase;\n            res.entity = entity.entity;\n        }\n        return res;\n    }\n\n    /**\n     * Map FAQ result for analysis\n     *\n     * @param {Object} faq FAQ Result object\n     * @param {Object} extraConfigs Extra configs for FAQ\n     * ```typescript\n     * {\n     *   isFirstFAQ: boolean;\n     *   threshold: number;\n     *   secondThreshold: number;\n     *   name: string;\n     * }\n     * ```\n     */\n    mapFAQResult(faq, extraConfigs) {\n        let res = null;\n        if (!node._.isNil(faq)) {\n            res = {};\n            res.qid = faq.id;\n            res.originalQuestion = faq.orig_question;\n            res.answer = faq.answer;\n\n            if (!node._.isNil(faq.multichannel_answers) && Array.isArray(faq.multichannel_answers)) {\n                res.multichannel_answers = [].concat(faq.multichannel_answers.map(x => this.mapMultiChannelFAQAnswers(x)));\n            }\n            res.categories = [].concat(node._.cloneDeep(faq.categories));\n            res.score = faq.score;\n\n            res.threshold = !!extraConfigs && extraConfigs.threshold || 0;\n            res.secondThreshold = !!extraConfigs && extraConfigs.secondThreshold || 0;\n            res.isFirstFAQ = !!extraConfigs && extraConfigs.isFirstFAQ || false;\n            res.name = !!extraConfigs && extraConfigs.name;\n        }\n        return res;\n    }\n\n    mapMultiChannelFAQAnswers(ans) {\n        let res = null;\n        if (!node._.isNil(ans)) {\n            res = {};\n            res.channel = ans.tab.name;\n            res.answer = ans.answer;\n        }\n        return res;\n    }\n\n    /**\n     * Map recored NLU result for Report used\n     * @param {Object} nluResult \n     */\n    mapNLUResultForReport(nluResult) {\n        if (!!nluResult &&\n            Array.isArray(nluResult.intents) && nluResult.intents.length) {\n\n            let isUndecided = false;\n            let isSuggested = false;\n            if (node._.isNumber(nluResult.threshold)) {\n                isUndecided = isUndecided || nluResult.intents[0].score < nluResult.threshold;\n            }\n            if (node._.isNumber(nluResult.fallbackScore)) {\n                isUndecided = isUndecided || nluResult.intents[0].score === nluResult.fallbackScore;\n            }\n            if (node._.isNumber(nluResult.secondThreshold)) {\n                isSuggested = isSuggested || nluResult.intents[0].score >= nluResult.secondThreshold;\n            }\n\n            return {\n                intent: nluResult.intents[0].intent,\n                undecided: isUndecided,\n                suggested: isSuggested\n            };\n        }\n        return null;\n    }\n\n    /**\n     * Map recored FAQ result for Report used\n     * @param {Object} faqResult \n     * @param {Object} extraConfigs Extra configs for `faqResult`\n     * ```typescript\n     * {\n     *   parentCategory: string;\n     *   childCategory: string;\n     * }\n     * ```\n     */\n    mapFAQResultForReport(faqResult, extraConfigs) {\n        let res = null;\n        if (!!faqResult) {\n            res = {};\n            res.qid = faqResult.qid;\n            res.originalQuestion = faqResult.originalQuestion;\n            res.score = faqResult.score;\n            res.undecided = node._.isNumber(faqResult.threshold) ? faqResult.score < faqResult.threshold : false;\n            res.suggested = node._.isNumber(faqResult.secondThreshold) ? faqResult.score >= faqResult.secondThreshold : false;\n            res.parentCategory = extraConfigs.parentCategory || undefined;\n            res.childCategory = extraConfigs.childCategory || undefined;\n            return res;\n        }\n        return null;\n    }\n\n    /**\n     * Get the NLU result marked as the first NLU\n     * @param {Object[]} list \n     */\n    getFirstNLU(list) {\n        if (Array.isArray(list) && list.length) {\n            return list.find(x => x.isFirstNLU) || null;\n        }\n    }\n\n    /**\n     * Get the NLU result marked as the second NLU\n     * @param {Object[]} list \n     */\n    getSecondNLU(list) {\n        if (Array.isArray(list) && list.length) {\n            return list.find(x => x.isSecondNLU) || null;\n        }\n    }\n\n    /**\n     * Get the NLU result marked as the third NLU\n     * @param {Object[]} list\n     */\n    getThirdNLU(list) {\n        if (Array.isArray(list) && list.length) {\n            return list.find(x => x.isThirdNLU) || null;\n        }\n    }\n\n    /**\n     * Get the FAQ result marked as the first FAQ\n     * @param {Object[]} list \n     */\n    getFirstFAQ(list) {\n        if (Array.isArray(list) && list.length) {\n            return list.find(x => x.isFirstFAQ) || null;\n        }\n    }\n}\n\n/**\n * 提供 `msg.config` 相關 Utility 方法\n */\nclass ConfigCtrl {\n\n    getBotApi(name) {\n        if (name && msg.config.apis.bots) {\n            return msg.config.apis.bots[name];\n        }\n    }\n\n    getNLUApi(name) {\n        if (name && msg.config.apis && msg.config.apis.nlu) {\n            return msg.config.apis.nlu[name];\n        }\n    }\n\n    getFAQApi(name) {\n        if (name && msg.config.apis && msg.config.apis.faq) {\n            return msg.config.apis.faq[name];\n        }\n    }\n\n    getLocalesApi() {\n        if (msg.config.apis && msg.config.apis.locales) {\n            return msg.config.apis.locales;\n        }\n    }\n\n    /**\n     * 取得 NLU 門檻值\n     * @param {string} name 設定的 NLU 名稱\n     */\n    getNLUThreshold(name) {\n        if (name && msg.config.threshold && msg.config.threshold.nlu) {\n            return msg.config.threshold.nlu[name];\n        }\n    }\n\n    /**\n     * 取得 NLU 次門檻值\n     * @param {string} name 設定的 NLU 名稱\n     */\n    getNLUSecondThreshold(name) {\n        return this.getNLUMinorThreshold(name);\n    }\n\n    /**\n     * 取得 NLU 次門檻值\n     * @param {string} name 設定的 NLU 名稱\n     */\n    getNLUMinorThreshold(name) {\n        if (name && msg.config.secondThreshold && msg.config.secondThreshold.nlu) {\n            return msg.config.secondThreshold.nlu[name];\n        }\n    }\n\n    /**\n     * 取得 FAQ 門檻值\n     * @param {string} name 設定 FAQ 的名稱\n     */\n    getFAQThreshold(name) {\n        if (name && msg.config.threshold && msg.config.threshold.faq) {\n            return msg.config.threshold.faq[name];\n        }\n    }\n\n    /**\n     * 取得 FAQ 次門檻值\n     * @param {string} name 設定的 FAQ 名稱\n     */\n    getFAQSecondThreshold(name) {\n        return this.getFAQMinorThreshold(name);\n    }\n\n    /**\n     * 取得 FAQ 次門檻值\n     * @param {string} name 設定的 FAQ 名稱\n     */\n    getFAQMinorThreshold(name) {\n        if (name && msg.config.secondThreshold && msg.config.secondThreshold.faq) {\n            return msg.config.secondThreshold.faq[name];\n        }\n    }\n\n    /**\n     * 取得原點值\n     * @param {string} name 設定 NLU 的名稱\n     */\n    getFallbackScore(name) {\n        return this.getOriginValue(name);\n    }\n\n    /**\n     * 取得原點值\n     * @param {string} name 設定 NLU 的名稱\n     */\n    getOriginValue(name) {\n        if (name && msg.config.nluFallbackScore) {\n            return msg.config.nluFallbackScore[name];\n        }\n    }\n\n    /**\n     * service 是否擁有指定的操作意圖（與項目意圖）\n     * @param { string } serviceName 服務意圖名稱\n     * @param { string } operationName 操作意圖名稱\n     * @param { item } itemName 項目意圖名稱\n     */\n    serviceHasOperationAndItem(serviceName, operationName, itemName) {\n        if (!msg.config.intentsMap || !serviceName) {\n            return false;\n        }\n\n        const operations = msg.config.intentsMap[serviceName] && Object.keys(msg.config.intentsMap[serviceName]) || [];\n        let items = [];\n        operations.forEach(op => {\n            items = items.concat(msg.config.intentsMap[serviceName][op] || []);\n        });\n\n        const hasOperation = operationName && operations.includes(operationName);\n        const hasItem = itemName && items.includes(itemName);\n        const itemsOfOperation = msg.config.intentsMap[serviceName] && Array.isArray(msg.config.intentsMap[serviceName][operationName]) ?\n            msg.config.intentsMap[serviceName][operationName] : [];\n        const hasItemOfOperation = operationName && itemName && hasOperation &&\n            itemsOfOperation.includes(itemName);\n\n        return hasOperation || hasItem || hasItemOfOperation;\n    }\n}\n\n\nmsg.systalk.utils = {\n    ReqMsgTypes: reqMsgTypes,\n    ReplyMsgTypes: replyMsgTypes,\n    ReqSignals: reqSignals,\n    ReqChannels: reqChannels,\n    Channel: Channel,\n    ReplyMsgFactory: new ReplyMsgFactory(),\n    ReqMsgCtrl: new ReqMsgCtrl(),\n    ReplyMsgCtrl: new ReplyMsgCtrl(),\n    ObjUtils: new ObjUtils(),\n    MsgUtils: new MsgUtils(),\n    QuitOptions: quitOptions,\n    LocalesUtils: new LocalesUtils(),\n    ReplyActionTypes: replyActionTypes,\n    QueueUtils: new QueueUtils(),\n    StringUtils: stringUtils,\n    ReportUtils: new ReportUtils(),\n    LangCtrl: new LangCtrl(),\n    AnalysisCtrl: new AnalysisCtrl(),\n    ConfigCtrl: new ConfigCtrl()\n};\n\n\nreturn msg;\n\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "e6972180.0a38c",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1550,
+        "y": 260,
+        "wires": [
+            [
+                "180f39e1.10aa16",
+                "523ff926.2cc308"
+            ]
+        ],
+        "func": "// msg._start_setup = false;\n// msg._start_flow = true;\n// return msg;\n\nnode.log(msg.systalk.nextRound);\nif (msg.systalk.nextRound) {\n    msg.systalk.needInfo.currentRound = msg.systalk.nextRound;\n} else {\n    msg.systalk.needInfo.currentRound = '_start_flow';\n}\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "72dad1d1.e49fa",
+        "type": "enter",
+        "name": "Response",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 2220,
+        "wires": [
+            [
+                "6660329c.3ae48c"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "nnull",
+                "p": "messages"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "3d3a9f53.b110e",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 990,
+        "y": 2220,
+        "wires": [
+            []
+        ],
+        "func": "\n\nreturn msg;\n\n\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "e3d6bd58.89d18",
+        "type": "enter",
+        "name": "Req User Input",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 160,
+        "y": 2280,
+        "wires": [
+            [
+                "d2197a1a.185538"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "false",
+                "p": "_enter_end_dialogue"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "d2197a1a.185538",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 370,
+        "y": 2280,
+        "wires": [
+            []
+        ],
+        "func": "msg._enter_end_dialogue = undefined;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": true
+    },
+    {
+        "id": "b8667713.9aea88",
+        "type": "enter",
+        "name": "End Dialogue",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 160,
+        "y": 2340,
+        "wires": [
+            [
+                "c4258787.3cc888"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "true",
+                "p": "_enter_end_dialogue"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "9f426fea.db6d7",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 590,
+        "y": 2340,
+        "wires": [
+            []
+        ],
+        "func": "msg._enter_end_dialogue = undefined;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": true,
+        "requestUserInput": false
+    },
+    {
+        "id": "58182aff.202b34",
+        "type": "comment",
+        "name": "統一處理回應",
+        "z": "ff73fcbd.82012",
+        "info": "為紀錄額外資訊並清除多餘資訊   \n因此，需於 `Router` output 前處理完成。  \n\n1. 將各子流程 state 節點，皆__不設定__ \n   `Request User Input` 或 `End Dialogue`。\n2. 由於 Router node 會__輪詢__ Enter node，\n   因此可__依序__設定與清理 Response ，\n   並決定是否需結束對話。",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 2180,
+        "wires": []
+    },
+    {
+        "id": "fc213e76.fa107",
+        "type": "function",
+        "name": "Config",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 590,
+        "y": 260,
+        "wires": [
+            [
+                "50aaf361.bbf2bc"
+            ],
+            [
+                "9f4e9c1.821046"
+            ]
+        ],
+        "func": "\nmsg.config = {\n    botType: '推薦',\n    /* 定義各子流程名稱與 Http-In Api */\n    apis: {\n        bots: {\n            \n        },\n        nlu: { // 流程有使用到的 NLU\n            '總機': 'http://10.20.30.203:30443/bot/nlu/api/v1/551ec2f9-503c-42a1-810b-2f82b750127a?token=RyBKG3HMxn6tdDXynCPEqH2btnZE3kF3&q=',\n            '服務台': null,\n        },\n        faq: { // 流程有使用到的 FAQ\n            // 語音導航FAQ\n            'FAQ': 'http://10.20.30.203:30443/bot/faq/api/v1/query/1f967970-e8cf-47a6-8444-d64e68d09174?token=vZb8oE6S2stcFSAYGQxjweDQgliSw0cS&query=',\n        },\n        locales: null, // Optional\n        resources: {\n        },\n        gateWay: {\n            // scene: 'http://10.20.30.225:8011/card/scene',\n            // text: 'http://10.20.30.225:8011/card/text',\n        },\n    },\n    names: {\n        firstNLU: '總機',\n        firstFAQ: 'FAQ',\n        firstNLUSupport: '服務台'\n    },\n    /**\n     * 信心值門檻\n     * 需要依實際情形調整\n     */\n    threshold: {\n        nlu: {\n            '總機': 0.7,\n            '服務台': null,\n        },\n        faq: {\n            'FAQ': 0.75\n        }\n    },\n    secondThreshold: {\n        nlu: {\n            '總機': 0.5,\n            '服務台': null,\n        },\n        faq: {\n            'FAQ': 0.65\n        }\n    },\n    faqMaxResultSize: 10,\n    /**\n     * 設定 NLU 原點值（訓練語料完全沒有符合的字詞，表示機器真的聽不懂）\n     * 每次訓練、修改後，需確認是否變更，並更新\n     */\n    nluFallbackScore: { // 設定各 NLU 原點值\n        '總機': 0.5219998364445331,\n        '服務台': null,\n    },\n    intents: { // 用以辨識的 Intent 名稱\n        toAgent: '真人服務',\n        end: '結束',\n    },\n    entities: { // 使用到的 Entity 名稱\n        resend: '服務判斷',\n        number: 'sys.數字',\n        datetime: 'sys.時間',\n    },\n    /**\n     * 提供服務台查找對應的三維意圖。\n     * 服務名稱為必須。\n     * 操作或項目為空，設為空陣列 `[]`\n     */\n    intentsMap: {\n        '<SERVICE_NAME>': {\n            '<OPERATION_NAME>': [ '<ITEM_NAME>' ]\n        }\n    },\n    /**\n     * Bot 預設設定值。\n     */\n    defaultConfig: {\n        botName: 'bot'\n    },\n    // 推薦選項(NLU/FAQ)數量限制\n    maxSuggestedNumber: 3,\n    // for GateWay used\n    headers:{\n        Authorization: 'B2CC430497B84006A3D3C53EABB10FDB'\n    },\n    role:'bot',\n    source: msg.reqMsg.source || '',\n    channel: msg.reqMsg.channel,\n    auxiliaryWords: ['嗯','唉','喔','啊','恩','摁','阿','哀','痾','哦','嗚','呃','欸'],\n    correctText: ['是','對','無誤','正確','沒錯','沒有錯','可以','要','有','沒問題','好'],\n    wrongText: ['否','不對','錯誤','不正確','有錯','錯','不可以','不要','沒有','有問題','不好','不是','有誤'],\n    defauleTextComparsionThreshold: 0.8,\n    higherFAQThreshold: 0.85,\n    higherNLUThreshold: 0.8\n};\n\n// 已有從 GateWay 參數 或 debug模式 || msg.debug\nif(msg.systalk.configParameters){\n    return [msg, null];\n}else{\n    //由API取得參數\n    return [null, msg];\n}",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "c7db32c7.fd0da",
+        "type": "comment",
+        "name": "取得定義文字／語句",
+        "z": "ff73fcbd.82012",
+        "info": "將回覆使用到語句，於另外的 web service 中定義  \n依據 `channel` 與 `locales` 區分  \n\n## channel\n\n目前 `channel` 以數字表示。  \n固定 `channel=1` 為預設文字， \n`channel=2` 為預設語音（TTS）。  \n\nchannel 為正整數 \n- `channel & 1 = 1; // bitwise AND`  \n  表示該 channel 支援使用文字回覆\n- `channel & 2 = 2; // bitwise AND`  \n  表示該 channel 支援使用語音回覆\n\n## locales\n\n目前僅提供 `'zh-tw'`\n\n\n\n\n",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "4a7544e3.d435ec",
+        "type": "function",
+        "name": "BotUtils",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1030,
+        "y": 260,
+        "wires": [
+            [
+                "25896ab8.9e7966"
+            ]
+        ],
+        "func": "\nclass BotUtils {\n    replaceTextByParams(text, params) {\n        if (params) {\n            Object.keys(params).forEach(key => {\n                if (params[key]) {\n                    const regex = new RegExp('{{\\\\s*' + key + '\\\\s*}}', 'gm');\n                    text.replace(regex, params[key]);\n                }\n            });\n        }\n        return text;\n    }\n}\nmsg.systalk.utils.BotUtils = new BotUtils();\nreturn msg;\n\n\n\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "61c5c1d9.761cb",
+        "type": "comment",
+        "name": "變更 endpoint",
+        "z": "ff73fcbd.82012",
+        "info": "",
+        "in": [],
+        "out": [],
+        "x": 180,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "6660329c.3ae48c",
+        "type": "function",
+        "name": "回應訊息",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 430,
+        "y": 2220,
+        "wires": [
+            [
+                "81628246.cd6a1"
+            ]
+        ],
+        "func": "const ReplyMsgFactory = msg.systalk.utils.ReplyMsgFactory;\n//message 回覆方式用object\nmsg.payload = {\n    messages: msg.messages || null,\n    error: node._.cloneDeep(msg.error) || null,\n    from: 'bot',\n    textComparsion: msg.textComparsion || undefined\n};\n\n\n\nif (msg.payload.messages.data & !msg.payload.messages.data.content.length) {\n    msg.payload.messages.push(ReplyMsgFactory.createText('<NO_REPLY>'));\n}\n\nif (!node._.isNil(msg.analysis)) {\n    msg.payload.analysis = {\n        nlu: [].concat(msg.analysis.nlu || []),\n        faq: [].concat(msg.analysis.faq || [])\n    };\n}\n\nmsg._enter_end_dialogue = msg._end_dialogue;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "c4258787.3cc888",
+        "type": "change",
+        "name": "刪除自訂紀錄資訊",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 390,
+        "y": 2340,
+        "wires": [
+            [
+                "9f426fea.db6d7"
+            ]
+        ],
+        "rules": [
+            {
+                "t": "delete",
+                "p": "systalk.pendingBot",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "systalk.config",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "systalk.sessionSalt",
+                "pt": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false
+    },
+    {
+        "id": "81628246.cd6a1",
+        "type": "function",
+        "name": "清除 msg 下屬性",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 710,
+        "y": 2220,
+        "wires": [
+            [
+                "3d3a9f53.b110e"
+            ]
+        ],
+        "func": "// 刪除單一訊息流程狀態\nmsg._start_flow = undefined;\nmsg._get_locales = undefined;\nmsg._end_dialogue = undefined;\nmsg._start_setup = undefined;\n\n// 刪除暫存訊息資訊\nmsg.error = undefined;\nmsg.config = undefined;\nmsg.url = undefined;\nmsg.method = undefined;\nmsg.headers = undefined;\nmsg.botType = undefined;\nmsg.quit = undefined;\n\n// 刪除 NLU 與 FAQ 結果\nmsg.NLU = undefined;\nmsg.FAQ = undefined;\n\n// 刪除自訂紀錄資訊\nmsg.systalk.locales = undefined;\nmsg.systalk.utils = undefined;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "33c436ed.d25f1a",
+        "type": "function",
+        "name": "Setup analysis",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1360,
+        "y": 260,
+        "wires": [
+            [
+                "e6972180.0a38c"
+            ]
+        ],
+        "func": "msg.analysis = {\n    faq: [],\n    nlu: []\n};\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "4cb9a1fc.f1de7",
+        "type": "comment",
+        "name": "!!注意!! 未設定 API 時 Error Handling",
+        "z": "ff73fcbd.82012",
+        "info": "當缺少 NLU API，送出錯誤訊息",
+        "in": [],
+        "out": [],
+        "x": 750,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "7537ee15.1f556",
+        "type": "enter",
+        "name": "Flow 發生錯誤",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 160,
+        "y": 2080,
+        "wires": [
+            [
+                "483d28e4.1eba78"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "nnull",
+                "p": "error"
+            },
+            {
+                "t": "nnull",
+                "p": "messages"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "483d28e4.1eba78",
+        "type": "state",
+        "name": "Error Response",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 390,
+        "y": 2080,
+        "wires": [
+            []
+        ],
+        "func": "const ReplyMsgFactory = msg.systalk.utils.ReplyMsgFactory;\n\nif (node._.isString(msg.error)) {\n    msg.messages.push(ReplyMsgFactory.createText(msg.error));\n}\nelse if (node._.isObject(msg.error)) {\n    msg.messages.push(ReplyMsgFactory.createText(JSON.stringify(msg.error)));\n}\n\n\nmsg._end_dialogue = false;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "2dab5822.155528",
+        "type": "comment",
+        "name": "!!注意!! Error Handling",
+        "z": "ff73fcbd.82012",
+        "info": "在 Flow 中 function / state node 發生 Exception 會以該節點收到的 msg 再帶出  \n因此 Catch node 雖然在 Exception 發生時也會被觸發，但 __原有流程如無特別處理__ 仍會繼續\n\nException 僅使用 debug 紀錄訊息",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 2040,
+        "wires": []
+    },
+    {
+        "id": "634c120e.5153fc",
+        "type": "comment",
+        "name": "!!注意!! 空訊息處理",
+        "z": "ff73fcbd.82012",
+        "info": "當流程發生錯誤時，`msg.messages` 容易為空  \n導致無合法的訊息可供 client 顯示  \n\n因此，需要針對 **空訊息** 處理  \n定義一個表示無任何回應的訊息顯示\n\n如：`{ type: 1, text: '<NO_REPLY>' }`",
+        "in": [],
+        "out": [],
+        "x": 450,
+        "y": 2180,
+        "wires": []
+    },
+    {
+        "id": "18b1aead.94d621",
+        "type": "catch",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 2140,
+        "wires": [
+            [
+                "f1033116.0c5d6"
+            ]
+        ],
+        "scope": null
+    },
+    {
+        "id": "f1033116.0c5d6",
+        "type": "debug",
+        "name": "Exception",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "error",
+        "x": 370,
+        "y": 2140,
+        "wires": []
+    },
+    {
+        "id": "9f4e9c1.821046",
+        "type": "function",
+        "name": "取得 config 參數",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 610,
+        "y": 320,
+        "wires": [
+            [
+                "c121e073.eb67d"
+            ]
+        ],
+        "func": "msg.headers = msg.config.headers;\nmsg.method = 'POST';\nmsg.url = msg.reqMsg.getParametersUrl;\n\nmsg.payload = {\n    categoryKey: \"ChatFlow\",\n    chatwebId: msg.reqMsg.message.chatwebId\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "c121e073.eb67d",
+        "type": "http request",
+        "name": "gateWay call chatManage",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 640,
+        "y": 380,
+        "wires": [
+            [
+                "210d2dd4.8f7342"
+            ]
+        ],
+        "method": "use",
+        "ret": "obj",
+        "url": ""
+    },
+    {
+        "id": "210d2dd4.8f7342",
+        "type": "function",
+        "name": "Get parameters",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 610,
+        "y": 440,
+        "wires": [
+            [
+                "50aaf361.bbf2bc"
+            ]
+        ],
+        "func": "msg.headers = undefined;\nmsg.method = undefined;\nmsg.url = undefined;\n\nif(msg.payload.code === 0){//查詢成功\n    const configParameters = msg.payload.data;\n    // 存systalk\n    msg.systalk.configParameters = configParameters;\n}else{\n    node.log(\"取得參數失敗！\");\n    node.log(msg.payload);\n}\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "50aaf361.bbf2bc",
+        "type": "function",
+        "name": "Set parameters",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 850,
+        "y": 260,
+        "wires": [
+            [
+                "4a7544e3.d435ec"
+            ]
+        ],
+        "func": "if(msg.systalk.configParameters){//有參數\n    //設定參數...\n    const configParameters = msg.systalk.configParameters;\n    \n    //BOT\n    \n    //NLU、FAQ\n    msg.config.apis.nlu['總機'] = configParameters.nlu_firstNLU;\n    msg.config.apis.faq['FAQ'] = configParameters.nlu_firstFAQ;\n\n    //GATEWAY\n    msg.config.apis.gateWay.scene = configParameters.gw_addr+':'+configParameters.gw_port+'/card/scene';\n    msg.config.apis.gateWay.faqAnswer = configParameters.gw_addr+':'+configParameters.gw_port+'/card/faqAnswer';\n    msg.config.apis.gateWay.text = configParameters.gw_addr+':'+configParameters.gw_port+'/card/text';\n    \n    //兆豐API\n    msg.config.apis.gateWay.recommendCard = `${configParameters.gw_addr}:${configParameters.gw_port}/megaBank/creditCard/recommendCard`;\n    \n    //門檻值\n    msg.config.threshold.nlu['總機'] = parseFloat(configParameters['thd_firstNLU']);\n    msg.config.threshold.faq['FAQ'] = parseFloat(configParameters['thd_firstFAQ']);\n    \n    //次門檻值\n    msg.config.secondThreshold.nlu['總機'] = parseFloat(configParameters['thd_firstNLU_2']);\n    msg.config.secondThreshold.faq['FAQ'] = parseFloat(configParameters['thd_firstFAQ_2']);\n    \n    //原點值\n    msg.config.nluFallbackScore['總機'] = parseFloat(configParameters['fall_firstNLU']);\n    \n    //FAQ最大回應筆數\n    msg.config.faqMaxResultSize = parseInt(configParameters['faqMaxResultSize']) || 3;\n    \n    \n    // 正確，字串比對選項\n    msg.config.correctText = configParameters['text_yes'] ?\n        configParameters['text_yes'].split(/[,，]/).filter(x => !!x) : null;\n    \n    // 錯誤，字串比對選項\n    msg.config.wrongText = configParameters['text_no'] ?\n        configParameters['text_no'].split(/[,，]/).filter(x => !!x) : null;\n    \n    \n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "a3076ba5.9e1438",
+        "type": "router",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 870,
+        "y": 140,
+        "wires": [
+            [
+                "1ccb41df.b0767e"
+            ]
+        ],
+        "sessionprop": "systalk._session_id",
+        "dryrun": "msg._dry_run",
+        "timeout": "1800"
+    },
+    {
+        "id": "1ccb41df.b0767e",
+        "type": "function",
+        "name": "Response",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1090,
+        "y": 140,
+        "wires": [
+            [
+                "f73bd48b.75ed68",
+                "3e4a79bd.79da36",
+                "172dcf5d.74da81"
+            ]
+        ],
+        "func": "return msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "a5a0d635.33a678",
+        "type": "function",
+        "name": "Set from Input",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 660,
+        "y": 140,
+        "wires": [
+            [
+                "a3076ba5.9e1438"
+            ]
+        ],
+        "func": "msg.reqMsg = msg.payload;\nmsg.systalk._session_id = msg.reqMsg.sessionId;\nmsg._start_setup = true;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "172dcf5d.74da81",
+        "type": "http response",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1290,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "f73bd48b.75ed68",
+        "type": "debug",
+        "name": "Before Output",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1300,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "3e4a79bd.79da36",
+        "type": "chat-out",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1290,
+        "y": 180,
+        "wires": [],
+        "server": "6cd3a1ef.26bed"
+    },
+    {
+        "id": "f8792062.195aa",
+        "type": "http in",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 210,
+        "y": 140,
+        "wires": [
+            [
+                "a5a0d635.33a678",
+                "ba7b1e08.eff9b"
+            ]
+        ],
+        "url": "/service",
+        "method": "post",
+        "swaggerDoc": ""
+    },
+    {
+        "id": "46575b01.826c94",
+        "type": "function",
+        "name": "Normalized ChatWeb Input",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 436,
+        "y": 60,
+        "wires": [
+            [
+                "a5a0d635.33a678"
+            ]
+        ],
+        "func": "let text = msg.payload;\nlet msgObj = {\n    message: {\n        channel: 'Voice',\n        type: 'customerMsg',\n        message: text,\n        messageId: '123456788',\n        sessionId: msg.systalk._session_id,\n        param:{\n            askAgent:\"N\",\n            traceTag:\"Voice\"\n        },\n        domain: null,\n        action: null,\n        errorCode: null\n    },\n    sessionId : msg.systalk._session_id,\n    intents: [],\n    stored: {},\n    channel: 'Voice',\n    chatwebId: '20210709163606157',\n    getParametersUrl : 'http://10.20.30.218:8011/config/parameters'\n};\n\nmsg.payload = msgObj;\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "ba7b1e08.eff9b",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 480,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "52600f5d.4608c",
+        "type": "chat-in",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 60,
+        "wires": [
+            [
+                "46575b01.826c94"
+            ]
+        ],
+        "sessionField": "systalk._session_id",
+        "server": "6cd3a1ef.26bed"
+    },
+    {
+        "id": "180f39e1.10aa16",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 1740,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "d50f3f3e.eb4a2",
+        "type": "function",
+        "name": "Message Type",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 380,
+        "y": 740,
+        "wires": [
+            [
+                "7ee8a9fe.b9b8c8"
+            ],
+            [
+                "7727ed74.d7f244"
+            ]
+        ],
+        "func": "const ReqMsgCtrl = msg.systalk.utils.ReqMsgCtrl;\nconst MsgUtils = msg.systalk.utils.MsgUtils;\n\n// if(queryCashBack){\n//      return MsgUtils.output(msg, 3, 2);\n// }\n\nif (msg.reqMsg.message.type === 'customerMsg'){\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nreturn MsgUtils.output(msg, 2, 2);\n",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "7727ed74.d7f244",
+        "type": "function",
+        "name": "Other message type",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 600,
+        "y": 760,
+        "wires": [
+            [
+                "695644f9.6b02cc"
+            ],
+            [
+                "8241d712.95f1c8"
+            ]
+        ],
+        "func": "const ReqMsgCtrl = msg.systalk.utils.ReqMsgCtrl;\nconst MsgUtils = msg.systalk.utils.MsgUtils;\n\nif (ReqMsgCtrl.isEndSignal(msg.reqMsg) ||\n    ReqMsgCtrl.isQuitSignal(msg.reqMsg)) {\n    return MsgUtils.output(msg, 1, 2);\n}\n\n// Fallback\nreturn MsgUtils.output(msg, 2, 2);\n\n",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "621b8f81.03fdf",
+        "type": "enter",
+        "name": "Start",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 740,
+        "wires": [
+            [
+                "d50f3f3e.eb4a2",
+                "212db995.5391e6",
+                "a0d90007.c9a57",
+                "7755474d.a8a638"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "_start_flow"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "695644f9.6b02cc",
+        "type": "state",
+        "name": "Quit",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 830,
+        "y": 740,
+        "wires": [
+            []
+        ],
+        "func": "msg.messages = {\n        code: 0,\n        msg: \"成功\",\n        data: {\n            channel: msg.config.channel,\n            source: msg.config.source,\n            role: msg.config.role,\n            content: [\n                {\n                    type: 1,\n                    text: \"請問您需要什麼服務？\"\n                },\n                {\n                    type: 2,\n                    width: \"segment secard horizontal\",\n                    cards: [\n                        {\n                            imageData: {\n                                image: \"img-card\"\n                            },\n                            linkList: [\n                                {   \n                                    action: 1, \n                                    text: \"推薦\", \n                                    data: \"推薦\"\n                                },\n                                {\n                                    action: 1, \n                                    text: \"介紹\", \n                                    data: \"介紹\"\n                                }\n                            ]\n                        }\n                    ]\n                }        \n            ]\n        }\n    };\n\nmsg._end_dialogue = false;\n\n\nreturn msg;\n\n\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "8241d712.95f1c8",
+        "type": "state",
+        "name": "Don't Understand",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 850,
+        "y": 780,
+        "wires": [
+            []
+        ],
+        "func": "msg.messages = {\n        code: 0,\n        msg: \"成功\",\n        data: {\n            channel: msg.config.channel,\n            source: msg.config.source,\n            role: msg.config.role,\n            content: [\n                {\n                    type: 1,\n                    text: \"請問您需要什麼服務？\"\n                },\n                {\n                    type: 2,\n                    width: \"segment secard horizontal\",\n                    cards: [\n                        {\n                            imageData: {\n                                image: \"img-card\"\n                            },\n                            linkList: [\n                                {   \n                                    action: 1, \n                                    text: \"推薦\", \n                                    data: \"推薦\"\n                                },\n                                {\n                                    action: 1, \n                                    text: \"介紹\", \n                                    data: \"介紹\"\n                                }\n                            ]\n                        }\n                    ]\n                }        \n            ]\n        }\n    };\n\nmsg._end_dialogue = false;\n\n\nreturn msg;\n\n\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "212db995.5391e6",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "reqMsg.message",
+        "x": 410,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "a0d90007.c9a57",
+        "type": "debug",
+        "name": "reqMsg",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "reqMsg.message",
+        "x": 370,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "7ee8a9fe.b9b8c8",
+        "type": "state",
+        "name": "進入推薦話術詢問回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 620,
+        "y": 720,
+        "wires": [
+            [
+                "3fb983c3.d0d0ec",
+                "7037d1e0.d5a36"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR001'\n        }\n    ]\t\n};\n\nmsg.textComparsion = {\n    \"現金回饋\": {\n        values: ['現金回饋', '現金'],\n        threshold: 0.8\n    },\n    \"紅利回饋\": {\n         values: ['紅利回饋', '紅利'],\n          threshold: 0.8\n    },\n    \"公益捐款\": {\n         values: ['公益捐款', '捐款'],\n          threshold: 0.8\n    }\n};\n\n// msg.queryCashBack = true;\n// msg._start_flow = false;\n\nmsg.systalk.nextRound = 'queryCashBack';\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "3fb983c3.d0d0ec",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 860,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "b91a89f0.ddec48",
+        "type": "enter",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 160,
+        "y": 920,
+        "wires": [
+            [
+                "18ce4d3d.c13a93",
+                "71d8cf01.f1f77",
+                "bf89ca50.2d2e28"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryCashBack"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "18ce4d3d.c13a93",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 360,
+        "y": 920,
+        "wires": [
+            [
+                "e9a71290.fd665"
+            ],
+            [
+                "9afebaa9.c4b308"
+            ],
+            [
+                "4b2468dd.5af0d8"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\n\n\nif (msg.reqMsg.textComparsion['現金回饋'].matched){\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 3);\n}\nif (msg.reqMsg.textComparsion['紅利回饋'].matched){\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 2, 3);\n}\nif (msg.reqMsg.textComparsion['公益捐款'].matched){\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 3, 3);\n}\n\n\nreturn msg;",
+        "outputs": 3,
+        "noerr": 0
+    },
+    {
+        "id": "e9a71290.fd665",
+        "type": "state",
+        "name": "現金回饋\b-詢問刷卡用途",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 590,
+        "y": 880,
+        "wires": [
+            [
+                "e56736a5.526028",
+                "2e02b27c.fba6fe"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR003'\n        }\n    ]\t\n};\n\nmsg.textComparsion = {\n    \"出門購物\": {\n        values: ['出門購物','出門'],\n        threshold: 0.8\n    },\n    \"網路購物\": {\n         values: ['網路購物', '網購'],\n          threshold: 0.8\n    },\n    \"保險費\": {\n         values: ['保險費'],\n          threshold: 0.8\n    }\n};\nmsg.systalk.nextRound = 'queryLeisureCash';\nmsg.systalk.needInfo.giveBack = '現金回饋';\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "71d8cf01.f1f77",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "reqMsg.message",
+        "x": 390,
+        "y": 840,
+        "wires": []
+    },
+    {
+        "id": "bf89ca50.2d2e28",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 360,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "9afebaa9.c4b308",
+        "type": "state",
+        "name": "紅利回饋-詢問休閒娛樂",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 590,
+        "y": 920,
+        "wires": [
+            [
+                "e56736a5.526028",
+                "2e02b27c.fba6fe"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR002'\n        }\n    ]\t\n};\n\n//字串比對\nmsg.textComparsion = {\n    \"看電影吃美食\": {\n        values: ['看電影吃美食','看電影','吃美食'],\n        threshold: 0.8\n    },\n    \"戶外運動\": {\n         values: ['戶外運動', '戶外','運動'],\n          threshold: 0.8\n    },\n    \"旅遊住宿\": {\n         values: ['旅遊住宿','旅遊','住宿'],\n          threshold: 0.8\n    }\n};\n\nmsg.systalk.nextRound = 'queryTransportWayBouns';\nmsg.systalk.needInfo.giveBack = '紅利回饋';\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "4b2468dd.5af0d8",
+        "type": "state",
+        "name": "公益捐款-詢問刷卡用途",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 590,
+        "y": 960,
+        "wires": [
+            [
+                "e56736a5.526028",
+                "2e02b27c.fba6fe"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR003'\n        }\n    ]\t\n};\n//字串比對\nmsg.textComparsion = {\n    \"出門購物\": {\n        values: ['出門購物','出門'],\n        threshold: 0.8\n    },\n    \"網路購物\": {\n         values: ['網路購物', '網購'],\n          threshold: 0.8\n    },\n    \"保險費\": {\n         values: ['保險費'],\n          threshold: 0.8\n    }\n};\n\nmsg.systalk.nextRound = 'queryTransportWayCharity';\nmsg.systalk.needInfo.giveBack = '公益捐款';\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "7755474d.a8a638",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 380,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "523ff926.2cc308",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1730,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "e56736a5.526028",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 840,
+        "y": 920,
+        "wires": []
+    },
+    {
+        "id": "641b95a7.21e7cc",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 820,
+        "y": 1080,
+        "wires": []
+    },
+    {
+        "id": "90fada23.7b7828",
+        "type": "state",
+        "name": "公益捐款",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1080,
+        "wires": [
+            [
+                "641b95a7.21e7cc"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR004'\n        }\n    ]\t\n};\n\nmsg.textComparsion = {\n    \"公車/捷運\": {\n        values: ['公車','捷運','公車/捷運'],\n        threshold: 0.8\n    },\n    \"開車/騎車\": {\n         values: ['開車', '騎車','開車/騎車'],\n          threshold: 0.8\n    },\n    \"台鐵/高鐵\": {\n         values: ['台鐵','高鐵','台鐵/高鐵'],\n          threshold: 0.8\n    }\n};\nmsg.systalk.nextRound = 'recommendCard';\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "8188e2eb.52259",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 440,
+        "y": 1100,
+        "wires": [
+            [
+                "90fada23.7b7828"
+            ],
+            [
+                "3d9c700d.c314f"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\nif (msg.reqMsg.textComparsion['出門購物'].matched){\n    msg.systalk.needInfo.use = '出門購物';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['網路購物'].matched){\n    msg.systalk.needInfo.use = '網路購物';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['保險費'].matched){\n    msg.systalk.needInfo.use = '保險費';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}else{\n    return MsgUtils.output(msg, 2, 2);\n}\n\nreturn msg;",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "5d2fd699.5e9db8",
+        "type": "enter",
+        "name": "公益捐款-詢問交通工具",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 1100,
+        "wires": [
+            [
+                "8188e2eb.52259",
+                "864bdcb6.52c12"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryTransportWayCharity"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "864bdcb6.52c12",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 440,
+        "y": 1060,
+        "wires": []
+    },
+    {
+        "id": "3281d3d4.98e6fc",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 820,
+        "y": 1240,
+        "wires": []
+    },
+    {
+        "id": "8a07de7e.110f",
+        "type": "state",
+        "name": "現金回饋",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1240,
+        "wires": [
+            [
+                "3281d3d4.98e6fc"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR002'\n        }\n    ]\t\n};\n\n//字串比對\nmsg.textComparsion = {\n    \"看電影吃美食\": {\n        values: ['看電影吃美食','看電影','吃美食'],\n        threshold: 0.8\n    },\n    \"戶外運動\": {\n         values: ['戶外運動', '戶外','運動'],\n          threshold: 0.8\n    },\n    \"旅遊住宿\": {\n         values: ['旅遊住宿','旅遊','住宿'],\n          threshold: 0.8\n    }\n};\nmsg.systalk.nextRound = 'queryTransportWayCash';\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "c80b26e1.52e328",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 420,
+        "y": 1260,
+        "wires": [
+            [
+                "8a07de7e.110f"
+            ],
+            []
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\nif (msg.reqMsg.textComparsion['出門購物'].matched){\n    msg.systalk.needInfo.use = '出門購物';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['網路購物'].matched){\n    msg.systalk.needInfo.use = '網路購物';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['保險費'].matched){\n    msg.systalk.needInfo.use = '保險費';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}else{\n    return MsgUtils.output(msg, 2, 2);\n}\n\nreturn msg;",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "cbe62b14.09ff48",
+        "type": "enter",
+        "name": "現金回饋-詢問休閒娛樂",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 1260,
+        "wires": [
+            [
+                "c80b26e1.52e328",
+                "b577816d.7fa33"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryLeisureCash"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "b577816d.7fa33",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 420,
+        "y": 1220,
+        "wires": []
+    },
+    {
+        "id": "7b549c0c.0ebd84",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 820,
+        "y": 1380,
+        "wires": []
+    },
+    {
+        "id": "252f37d6.f36c38",
+        "type": "state",
+        "name": "現金回饋",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1380,
+        "wires": [
+            [
+                "7b549c0c.0ebd84"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR004'\n        }\n    ]\t\n};\n\n//字串比對\nmsg.textComparsion = {\n    \"公車/捷運\": {\n        values: ['公車','捷運','公車/捷運'],\n        threshold: 0.8\n    },\n    \"開車/騎車\": {\n         values: ['開車', '騎車','開車/騎車'],\n          threshold: 0.8\n    },\n    \"台鐵/高鐵\": {\n         values: ['台鐵','高鐵','台鐵/高鐵'],\n          threshold: 0.8\n    }\n};\nmsg.systalk.nextRound = 'recommendCard';\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "23689cfb.02c784",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 420,
+        "y": 1400,
+        "wires": [
+            [
+                "252f37d6.f36c38"
+            ],
+            []
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\nif (msg.reqMsg.textComparsion['看電影吃美食'].matched){\n    msg.systalk.needInfo.entertainment = '看電影吃美食';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['旅遊住宿'].matched){\n    msg.systalk.needInfo.entertainment = '旅遊住宿';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['戶外運動'].matched){\n    msg.systalk.needInfo.entertainment = '戶外運動';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}else{\n    return MsgUtils.output(msg, 2, 2);\n}\n\nreturn msg;",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "fa152ff8.aafac",
+        "type": "enter",
+        "name": "現金回饋-詢問交通工具",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 1400,
+        "wires": [
+            [
+                "23689cfb.02c784",
+                "4ce1852b.ebd3cc"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryTransportWayCash"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "4ce1852b.ebd3cc",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 420,
+        "y": 1360,
+        "wires": []
+    },
+    {
+        "id": "c9ab72fe.f55b1",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 820,
+        "y": 1720,
+        "wires": []
+    },
+    {
+        "id": "abdad25d.74f36",
+        "type": "state",
+        "name": "紅利回饋",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1720,
+        "wires": [
+            [
+                "c9ab72fe.f55b1"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR005'\n        }\n    ]\t\n};\n\n//字串比對\nmsg.textComparsion = {\n    \"分期付款\": {\n        values: ['分期付款','分期','付款'],\n        threshold: 0.8\n    },\n    \"一次付清\": {\n         values: ['一次付清', '一次','付清'],\n          threshold: 0.8\n    },\n    \"公車/捷運\": {\n        values: ['公車','捷運','公車/捷運'],\n        threshold: 0.8\n    },\n    \"開車/騎車\": {\n         values: ['開車', '騎車','開車/騎車'],\n          threshold: 0.8\n    },\n    \"台鐵/高鐵\": {\n         values: ['台鐵','高鐵','台鐵/高鐵'],\n          threshold: 0.8\n    }\n};\n\nmsg.systalk.nextRound = 'recommendCard';\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "86bd43ca.12e7b",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 420,
+        "y": 1720,
+        "wires": [
+            [
+                "abdad25d.74f36"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\nif (msg.reqMsg.textComparsion['公車/捷運'].matched){\n    msg.systalk.needInfo.transportation = '公車/捷運';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['開車/騎車'].matched){\n    msg.systalk.needInfo.transportation = '開車/騎車';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['台鐵/高鐵'].matched){\n    msg.systalk.needInfo.transportation = '台鐵/高鐵';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}else{\n    return MsgUtils.output(msg, 2, 2);\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "fbf45bad.2bc4f8",
+        "type": "enter",
+        "name": "紅利回饋-詢問付費方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 1720,
+        "wires": [
+            [
+                "86bd43ca.12e7b",
+                "b18dced.98db43"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryPayWay"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "b18dced.98db43",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 420,
+        "y": 1680,
+        "wires": []
+    },
+    {
+        "id": "5fc4cf5e.f09c",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 820,
+        "y": 1600,
+        "wires": []
+    },
+    {
+        "id": "1bf1589f.3ed147",
+        "type": "state",
+        "name": "紅利回饋",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1600,
+        "wires": [
+            [
+                "5fc4cf5e.f09c"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.scene;\nmsg._gateWay = true;\nmsg.payload = {\n    chatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: msg.config.source,\n    role: 'bot',\n    content: [\n        {\n            scene: 'JR004'\n        }\n    ]\t\n};\n\n//字串比對\nmsg.textComparsion = {\n    \"公車/捷運\": {\n        values: ['公車','捷運','公車/捷運'],\n        threshold: 0.8\n    },\n    \"開車/騎車\": {\n         values: ['開車', '騎車','開車/騎車'],\n          threshold: 0.8\n    },\n    \"台鐵/高鐵\": {\n         values: ['台鐵','高鐵','台鐵/高鐵'],\n          threshold: 0.8\n    }\n};\n\nmsg.systalk.nextRound = 'queryPayWay';\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "3951f8fb.8f4848",
+        "type": "function",
+        "name": "選擇回饋方式",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 420,
+        "y": 1600,
+        "wires": [
+            [
+                "1bf1589f.3ed147"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg.message);\nnode.log(msg.reqMsg.message.message);\nif (msg.reqMsg.textComparsion['看電影吃美食'].matched){\n    msg.systalk.needInfo.entertainment = '看電影吃美食';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['旅遊住宿'].matched){\n    msg.systalk.needInfo.entertainment = '旅遊住宿';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}\nelse if (msg.reqMsg.textComparsion['戶外運動'].matched){\n    msg.systalk.needInfo.entertainment = '戶外運動';\n    let content = msg.reqMsg.message.message;\n    msg.text = content;\n    msg.payload = msg.text;\n    return MsgUtils.output(msg, 1, 2);\n}else{\n    return MsgUtils.output(msg, 2, 2);\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "5a442cf2.6ef764",
+        "type": "enter",
+        "name": "紅利回饋-詢問交通工具",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 190,
+        "y": 1600,
+        "wires": [
+            [
+                "3951f8fb.8f4848",
+                "fd2dd53c.733378"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "queryTransportWayBouns"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "fd2dd53c.733378",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 420,
+        "y": 1560,
+        "wires": []
+    },
+    {
+        "id": "a37e6c08.8c0e2",
+        "type": "comment",
+        "name": "公益捐款",
+        "z": "ff73fcbd.82012",
+        "info": "",
+        "in": [],
+        "out": [],
+        "x": 170,
+        "y": 1060,
+        "wires": []
+    },
+    {
+        "id": "5f942004.2fd84",
+        "type": "comment",
+        "name": "現金回饋",
+        "z": "ff73fcbd.82012",
+        "info": "",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 1220,
+        "wires": []
+    },
+    {
+        "id": "df815c46.f75af",
+        "type": "comment",
+        "name": "紅利回饋",
+        "z": "ff73fcbd.82012",
+        "info": "",
+        "in": [],
+        "out": [],
+        "x": 150,
+        "y": 1560,
+        "wires": []
+    },
+    {
+        "id": "7037d1e0.d5a36",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "systalk.nextRound",
+        "x": 890,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "64c73b97.7efca4",
+        "type": "enter",
+        "name": "gateWay",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 145,
+        "y": 1841,
+        "wires": [
+            [
+                "6d2f8ef4.51ae3"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "true",
+                "p": "_gateWay"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "6d2f8ef4.51ae3",
+        "type": "function",
+        "name": "組 Request Parameters",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 410,
+        "y": 1840,
+        "wires": [
+            [
+                "e397edd5.1b20c",
+                "59af3bae.d49094"
+            ]
+        ],
+        "func": "msg.headers = msg.config.headers;\nmsg.method = 'POST';\n\n// msg.payload = {\n//     chatwebId: '20210202144733843',\n//     channel: msg.config.channel\n// };\n\nmsg.payload.flowCard = {\n\tchatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: 'customer',\n    role: msg.config.role\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "e397edd5.1b20c",
+        "type": "http request",
+        "name": "gateWay",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 665,
+        "y": 1839,
+        "wires": [
+            [
+                "7eefb38a.2f823c"
+            ]
+        ],
+        "method": "use",
+        "ret": "obj",
+        "url": ""
+    },
+    {
+        "id": "59af3bae.d49094",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 655,
+        "y": 1780,
+        "wires": []
+    },
+    {
+        "id": "7eefb38a.2f823c",
+        "type": "function",
+        "name": "處理資料",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 864,
+        "y": 1839,
+        "wires": [
+            [
+                "57482ce0.ba26c4",
+                "5f16a59.a7d275c"
+            ],
+            [
+                "ecd9ad7c.d4ab8",
+                "2c41878b.a62678"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\nconst numOfOuts = 2;\n\n// 刪除條件\nmsg._gateWay = undefined;\n\n// 刪除 http 資料\nmsg.headers = undefined;\nmsg.method = undefined;\nmsg.url = undefined;\n\n// Gateway 發生錯誤\nif (msg.payload.code !== 0) {\n    return MsgUtils.output(msg, 2, numOfOuts);\n}\n\n// 回覆訊息\nmsg.messages = msg.payload;\nif (msg.preMessages) {\n    msg.messages.data.content.concat(msg.preMessages.data.content)\n}\n\nreturn MsgUtils.output(msg, 1, numOfOuts);\n",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "57482ce0.ba26c4",
+        "type": "state",
+        "name": "回覆訊息",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1090,
+        "y": 1800,
+        "wires": [
+            []
+        ],
+        "func": "return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "5f16a59.a7d275c",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 1100,
+        "y": 1760,
+        "wires": []
+    },
+    {
+        "id": "ecd9ad7c.d4ab8",
+        "type": "state",
+        "name": "Gateway 發生錯誤",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1110,
+        "y": 1860,
+        "wires": [
+            []
+        ],
+        "func": "const BotUtils = msg.systalk.utils.BotUtils;\nconst ChatWebResponse = msg.systalk.utils.ChatWebResponse;\n// 結束對話\nmsg._end_dialogue = true;\n\nChatWebResponse.addText(\"現在長庚阿波調整中，造成不便請見諒\")\n\nmsg.messages = ChatWebResponse.getMsgObj;\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "2c41878b.a62678",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 1100,
+        "y": 1900,
+        "wires": []
+    },
+    {
+        "id": "af5a99db.ac76a8",
+        "type": "enter",
+        "name": "聽不懂",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1050,
+        "y": 860,
+        "wires": [
+            [
+                "9446acd0.0d4e3"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "true",
+                "p": "_dont_understand"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "9446acd0.0d4e3",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1210,
+        "y": 860,
+        "wires": [
+            []
+        ],
+        "func": "msg._dont_understand = undefined;\nmsg.systalk.needInfo.needConfirm === undefined;\nmsg.systalk.needInfo.toAgent = msg.systalk.needInfo.toAgent + 1;\nmsg.messages = msg.systalk.needInfo.lastPayload;\nnode.log(\"msg.systalk.needInfo.lastPayload :\"+msg.systalk.needInfo.lastPayload)\nnode.log(\"執行不知道\")\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "3d9c700d.c314f",
+        "type": "state",
+        "name": "聽不懂",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 630,
+        "y": 1120,
+        "wires": [
+            []
+        ],
+        "func": "msg._dont_understand = true;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "2e02b27c.fba6fe",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1010,
+        "y": 920,
+        "wires": []
+    },
+    {
+        "id": "5b75266f.7b2e48",
+        "type": "enter",
+        "name": "卡片適性推薦",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1060,
+        "y": 1080,
+        "wires": [
+            [
+                "b7a8d3b7.2ed74",
+                "2b2d0b69.bceef4"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "eq",
+                "p": "systalk.needInfo.currentRound",
+                "v": "recommendCard"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "b7a8d3b7.2ed74",
+        "type": "function",
+        "name": "信用卡推薦",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1230,
+        "y": 1080,
+        "wires": [
+            [
+                "a2452e9d.8f14d"
+            ],
+            [
+                "83331aea.e25ca8"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\n\nnode.log(msg.reqMsg);\nnode.log(msg.reqMsg.textComparsion['一次付清'].matched);\nnode.log(msg.reqMsg.textComparsion['分期付款'].matched);\n\nif (msg.reqMsg.textComparsion['公車/捷運'].matched || msg.reqMsg.textComparsion['開車/騎車'].matched \n    || msg.reqMsg.textComparsion['台鐵/高鐵'].matched){\n    \n    msg.systalk.needInfo.transportation = msg.reqMsg.message.msg;\n    return MsgUtils.output(msg, 1, 2);\n}else if (msg.reqMsg.textComparsion['一次付清'].matched || msg.reqMsg.textComparsion['分期付款'].matched){\n    msg.systalk.needInfo.paid = msg.reqMsg.message.msg;\n    return MsgUtils.output(msg, 2, 2);\n}\n\n\nreturn msg;",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "a2452e9d.8f14d",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1430,
+        "y": 1060,
+        "wires": [
+            [
+                "6da73ed5.769cf"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.recommendCard;\nmsg._recommendCardAPI = true;\n\nmsg.payload = {\n    giveBack:  msg.systalk.needInfo.giveBack,//回饋方式\n    use:  msg.systalk.needInfo.use,//刷卡用途\n    entertainment:  msg.systalk.needInfo.entertainment,//休閒娛樂\n    transportation: msg.systalk.needInfo.transportation,//交通工具\n    paid:  msg.systalk.needInfo.paid,//付款方式\n};\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "6da73ed5.769cf",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1610,
+        "y": 1060,
+        "wires": []
+    },
+    {
+        "id": "325b9f41.d92be",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 1100,
+        "y": 1940,
+        "wires": []
+    },
+    {
+        "id": "93d239b3.e05708",
+        "type": "function",
+        "name": "處理資料",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 864,
+        "y": 1999,
+        "wires": [
+            [
+                "abefa9ef.fbc9a8",
+                "325b9f41.d92be"
+            ],
+            [
+                "6a03c21c.9a723c",
+                "5f32133e.5cfe2c"
+            ]
+        ],
+        "func": "const MsgUtils = msg.systalk.utils.MsgUtils;\nconst numOfOuts = 2;\n\n// 刪除條件\nmsg._gateWay = undefined;\n\n// 刪除 http 資料\nmsg.headers = undefined;\nmsg.method = undefined;\nmsg.url = undefined;\n\n// Gateway 發生錯誤\nif (msg.payload.code !== 0) {\n    return MsgUtils.output(msg, 2, numOfOuts);\n}\n\n// 回覆訊息\nmsg.messages = msg.payload;\nif (msg.preMessages) {\n    msg.messages.data.content.concat(msg.preMessages.data.content)\n}\n\nreturn MsgUtils.output(msg, 1, numOfOuts);\n",
+        "outputs": 2,
+        "noerr": 0
+    },
+    {
+        "id": "cfee62dc.ff3b3",
+        "type": "http request",
+        "name": "gateWay",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 665,
+        "y": 1999,
+        "wires": [
+            [
+                "93d239b3.e05708"
+            ]
+        ],
+        "method": "use",
+        "ret": "obj",
+        "url": ""
+    },
+    {
+        "id": "abefa9ef.fbc9a8",
+        "type": "state",
+        "name": "回覆訊息",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1090,
+        "y": 1980,
+        "wires": [
+            []
+        ],
+        "func": "return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "6a03c21c.9a723c",
+        "type": "state",
+        "name": "Gateway 發生錯誤",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1110,
+        "y": 2020,
+        "wires": [
+            []
+        ],
+        "func": "const BotUtils = msg.systalk.utils.BotUtils;\nconst ChatWebResponse = msg.systalk.utils.ChatWebResponse;\n// 結束對話\nmsg._end_dialogue = true;\n\nChatWebResponse.addText(\"現在長庚阿波調整中，造成不便請見諒\")\n\nmsg.messages = ChatWebResponse.getMsgObj;\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "5f32133e.5cfe2c",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 1100,
+        "y": 2060,
+        "wires": []
+    },
+    {
+        "id": "9078814b.021d4",
+        "type": "function",
+        "name": "組 Request Parameters",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 410,
+        "y": 2000,
+        "wires": [
+            [
+                "cfee62dc.ff3b3",
+                "97b2ad1a.87a49"
+            ]
+        ],
+        "func": "msg.headers = msg.config.headers;\nmsg.method = 'POST';\nmsg.payload.flowCard = {\n\tchatwebId: msg.reqMsg.message.chatwebId,\n    channel: msg.config.channel,\n    source: 'customer',\n    role: msg.config.role\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0
+    },
+    {
+        "id": "8ac58a8b.943968",
+        "type": "enter",
+        "name": "推薦信用卡API",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 155,
+        "y": 2001,
+        "wires": [
+            [
+                "9078814b.021d4"
+            ]
+        ],
+        "outputs": 1,
+        "rules": [
+            {
+                "t": "true",
+                "p": "_recommendCardAPI"
+            }
+        ],
+        "directlink": false,
+        "initialstate": false,
+        "fallback": false
+    },
+    {
+        "id": "97b2ad1a.87a49",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "false",
+        "x": 655,
+        "y": 1940,
+        "wires": []
+    },
+    {
+        "id": "2b2d0b69.bceef4",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1250,
+        "y": 1020,
+        "wires": []
+    },
+    {
+        "id": "83331aea.e25ca8",
+        "type": "state",
+        "name": "state",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "x": 1430,
+        "y": 1100,
+        "wires": [
+            [
+                "6238b89a.6935a8"
+            ]
+        ],
+        "func": "msg.url = msg.config.apis.gateWay.recommendCard;\nmsg._recommendCardAPI = true;\n\nmsg.payload = {\n    giveBack:  msg.systalk.needInfo.giveBack,//回饋方式\n    use:  msg.systalk.needInfo.use,//刷卡用途\n    entertainment:  msg.systalk.needInfo.entertainment,//休閒娛樂\n    transportation: msg.systalk.needInfo.transportation,//交通工具\n    paid:  msg.systalk.needInfo.paid,//付款方式\n};\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "response": "",
+        "finalstate": false,
+        "requestUserInput": false
+    },
+    {
+        "id": "6238b89a.6935a8",
+        "type": "debug",
+        "name": "",
+        "z": "ff73fcbd.82012",
+        "in": [],
+        "out": [],
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 1610,
+        "y": 1100,
+        "wires": []
+    }
+]
